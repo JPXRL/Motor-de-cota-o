@@ -493,6 +493,35 @@
     }
   }
 
+  /* ===== Histórico de cotações ===== */
+  .historico-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .historico-head {
+    display: grid;
+    grid-template-columns: 1.1fr 1.6fr 0.8fr 0.9fr 1.3fr 0.9fr;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-soft);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .historico-row {
+    display: grid;
+    grid-template-columns: 1.1fr 1.6fr 0.8fr 0.9fr 1.3fr 0.9fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .historico-row .muted { color: var(--muted); font-size: 12px; }
+  @media (max-width: 720px) {
+    .historico-head { display: none; }
+    .historico-row { grid-template-columns: 1fr 1fr; row-gap: 4px; }
+  }
+
   /* ===== Cadastro de caixas ===== */
   .caixa-row {
     display: grid;
@@ -531,6 +560,10 @@
       <button type="button" class="sidebar-item" data-view="caixas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>
         Cadastro de caixas
+      </button>
+      <button type="button" class="sidebar-item" data-view="historico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
+        Histórico
       </button>
     </nav>
     <div class="sidebar-bottom">
@@ -776,6 +809,21 @@
         </div>
       </div>
     </div>
+
+    <!-- ===== Tela: Histórico de cotações ===== -->
+    <div id="view-historico" class="app-view" hidden>
+      <div class="wrap">
+        <h1>Histórico de cotações</h1>
+        <p class="subtitle">Registro simples de apoio — não substitui o Sankhya, só ajuda a acompanhar o uso do motor.</p>
+
+        <div class="panel" id="painel-historico-status"></div>
+
+        <div class="panel">
+          <h2>Cotações mais recentes</h2>
+          <div id="lista-historico"></div>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -816,8 +864,59 @@
       btn.classList.add('active');
       document.querySelectorAll('.app-view').forEach((v) => { v.hidden = true; });
       document.getElementById(`view-${btn.dataset.view}`).hidden = false;
+      if (btn.dataset.view === 'historico') carregarHistorico();
     });
   });
+
+  // ================= Histórico de cotações (log de apoio) =================
+  // Busca só quando a tela é aberta (não no carregamento da página) porque a
+  // lista cresce a cada cotação — assim sempre mostra o que há de mais
+  // recente, sem precisar recarregar a página inteira.
+  async function carregarHistorico() {
+    const painelStatus = document.getElementById('painel-historico-status');
+    const lista = document.getElementById('lista-historico');
+    painelStatus.innerHTML = '<p class="arch-note" style="margin:0;">Carregando…</p>';
+    try {
+      const resp = await fetch('/api/historico-cotacoes', { headers: { 'Cache-Control': 'no-store' } });
+      const dados = await resp.json();
+      const historico = Array.isArray(dados.historico) ? dados.historico : [];
+
+      painelStatus.innerHTML = dados.persistente
+        ? '<p class="arch-note" style="margin:0;">✅ Histórico conectado a um banco de dados (Vercel KV) — mostrando as cotações mais recentes.</p>'
+        : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ O histórico ainda não está conectado a um banco de dados — as cotações feitas não estão sendo guardadas (aba "Storage" do projeto no Vercel, criar/conectar um banco KV). A tela de Cotação continua funcionando normalmente.</p>';
+
+      if (!historico.length) {
+        lista.innerHTML = '<p class="arch-note" style="margin:0;">Nenhuma cotação registrada ainda.</p>';
+        return;
+      }
+
+      lista.innerHTML = `
+        <div class="historico-table">
+          <div class="historico-head">
+            <span>Data/hora</span>
+            <span>Cliente</span>
+            <span>Peso</span>
+            <span>Valor</span>
+            <span>Melhor opção</span>
+            <span>Cotações</span>
+          </div>
+          ${historico.map((h) => `
+            <div class="historico-row">
+              <span>${escapeHtml(new Date(h.dataHora).toLocaleString('pt-BR'))}</span>
+              <span>${escapeHtml(h.cliente || h.cnpjDest || '—')}<br><span class="muted">${escapeHtml(h.cidadeDest || '')}</span></span>
+              <span>${h.pesoTotal ? String(h.pesoTotal).replace('.', ',') + ' kg' : '—'}</span>
+              <span>${h.valorMerc ? 'R$ ' + Number(h.valorMerc).toFixed(2).replace('.', ',') : '—'}</span>
+              <span>${h.melhor ? escapeHtml(h.melhor.transportadora) + ' · R$ ' + Number(h.melhor.valor).toFixed(2).replace('.', ',') : '—'}</span>
+              <span>${(h.resultados || []).length} ok${(h.erros || []).length ? `, ${h.erros.length} erro` : ''}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } catch (err) {
+      painelStatus.innerHTML = '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ Não foi possível carregar o histórico agora.</p>';
+      lista.innerHTML = '';
+    }
+  }
 
   // ================= Caixas padrão (seletor de volumes) =================
   // Lista carregada de /api/caixas (guardada no Vercel KV, quando
@@ -1344,6 +1443,26 @@
         <div class="status-dot-row status-erro"><span class="status-dot"></span>Erro</div>
       </div>
     `).join('');
+
+    // ================= Histórico de cotações (log de apoio) =================
+    // Dispara depois que a cotação já terminou e já apareceu na tela — se essa
+    // chamada falhar (ex.: KV não conectado), não pode travar nem atrasar o
+    // operador, por isso não usa await e ignora qualquer erro em silêncio.
+    fetch('/api/historico-cotacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+      body: JSON.stringify({
+        cliente: document.getElementById('razaoSocial').value || null,
+        cnpjDest: dados.cnpjDest,
+        cidadeDest: document.getElementById('cidadeDest').value || null,
+        pesoTotal: dados.pesoTotal,
+        valorMerc: dados.valorMerc,
+        tipoFrete: dados.tipoFrete,
+        resultados: respostas.map((r) => ({ transportadora: r.transportadora.nome, modal: r.modal, prazoDias: r.prazoDias, valor: r.valor })),
+        erros: erros.map((e) => ({ transportadora: e.transportadora.nome, modal: e.modal, mensagem: e.mensagem })),
+        melhor: respostas.length ? { transportadora: respostas[0].transportadora.nome, valor: respostas[0].valor } : null,
+      }),
+    }).catch(() => { /* log de apoio — falha aqui não deve incomodar o operador */ });
 
     btnCotar.textContent = textoOriginalBotao;
     btnCotar.disabled = false;
