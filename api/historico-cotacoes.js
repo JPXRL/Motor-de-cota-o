@@ -1,7 +1,8 @@
 // Serverless function: guarda um registro de cada cotação feita no motor
-// (data/hora, cliente, peso/valor informados, transportadora vencedora, o
-// percentual que o frete representa sobre o valor do pedido, e o resultado
-// bruto de cada transportadora consultada) — pra dar visibilidade de uso
+// (data/hora, cliente/CNPJ, valor do pedido, transportadora vencedora, valor
+// e prazo do frete vencedor, o percentual que o frete representa sobre o
+// valor do pedido, e o resultado bruto de cada transportadora consultada) —
+// pra dar visibilidade de uso
 // (quantas cotações por dia, quem ganha mais, se os valores/percentuais
 // estão subindo) e permitir consulta com SQL de verdade (relatórios, médias,
 // filtros por período/transportadora, etc.). NÃO substitui o Sankhya como
@@ -35,10 +36,16 @@ async function garantirTabela() {
       melhor_transportadora TEXT,
       melhor_valor NUMERIC,
       melhor_percentual NUMERIC,
+      melhor_prazo_dias NUMERIC,
       resultados JSONB,
       erros JSONB
     )
   `;
+  // Coluna adicionada depois da tabela já existir em produção (pedido do
+  // Juan, 02/09/2026: guardar o prazo junto com valor/percentual pra dar
+  // pra comparar tudo direto por SQL, sem precisar abrir o JSON de
+  // "resultados"). IF NOT EXISTS deixa isso seguro de rodar sempre.
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS melhor_prazo_dias NUMERIC`;
 }
 
 module.exports = async (req, res) => {
@@ -53,7 +60,7 @@ module.exports = async (req, res) => {
       const { rows } = await sql`
         SELECT id, criado_em, cliente, cnpj_dest, cidade_dest, peso_total, valor_merc,
                tipo_frete, melhor_transportadora, melhor_valor, melhor_percentual,
-               resultados, erros
+               melhor_prazo_dias, resultados, erros
         FROM historico_cotacoes
         ORDER BY criado_em DESC
         LIMIT 200
@@ -72,6 +79,7 @@ module.exports = async (req, res) => {
               transportadora: r.melhor_transportadora,
               valor: r.melhor_valor !== null ? Number(r.melhor_valor) : null,
               percentual: r.melhor_percentual !== null ? Number(r.melhor_percentual) : null,
+              prazoDias: r.melhor_prazo_dias !== null ? Number(r.melhor_prazo_dias) : null,
             }
           : null,
         resultados: r.resultados || [],
@@ -112,7 +120,7 @@ module.exports = async (req, res) => {
     await sql`
       INSERT INTO historico_cotacoes
         (cliente, cnpj_dest, cidade_dest, peso_total, valor_merc, tipo_frete,
-         melhor_transportadora, melhor_valor, melhor_percentual, resultados, erros)
+         melhor_transportadora, melhor_valor, melhor_percentual, melhor_prazo_dias, resultados, erros)
       VALUES (
         ${registro.cliente || null},
         ${registro.cnpjDest || null},
@@ -123,6 +131,7 @@ module.exports = async (req, res) => {
         ${melhor ? melhor.transportadora : null},
         ${melhor ? melhor.valor : null},
         ${percentual},
+        ${melhor ? melhor.prazoDias : null},
         ${JSON.stringify(registro.resultados || [])},
         ${JSON.stringify(registro.erros || [])}
       )
