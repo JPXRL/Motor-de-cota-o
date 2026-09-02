@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cotação de Frete — RARE WAY</title>
+<style>
+  :root {
+    /* Cores institucionais RARE WAY (do manual de identidade visual) */
+    --rw-pink: #FD9FB1;
+    --rw-teal: #57D5D1;
+    --rw-purple: #C0ADDB;
+
+    /* Tons derivados por color-mix() a partir das 3 cores da marca — usados
+       pra garantir contraste em botões/texto sem precisar "chutar" um hex
+       exato da rampa do manual. Se depois vocês quiserem os tons exatos da
+       rampa impressa, é só trocar estas variáveis pelos hex reais. */
+    --rw-pink-deep: color-mix(in srgb, var(--rw-pink) 55%, black);
+    --rw-teal-deep: color-mix(in srgb, var(--rw-teal) 50%, black);
+    --rw-purple-deep: color-mix(in srgb, var(--rw-purple) 55%, black);
+
+    --bg: #ffffff;
+    --bg-soft: color-mix(in srgb, var(--rw-purple) 8%, white);
+    --panel: #ffffff;
+    --border: color-mix(in srgb, var(--rw-purple) 22%, white);
+    --text: #14141a;
+    --muted: #67626f;
+    --accent: var(--rw-pink-deep);
+    --accent-contrast: #ffffff;
+    --accent-bg: color-mix(in srgb, var(--rw-pink) 22%, white);
+    --best-bg: color-mix(in srgb, var(--rw-teal) 20%, white);
+    --warn-bg: color-mix(in srgb, var(--rw-pink) 16%, white);
+    --warn-border: color-mix(in srgb, var(--rw-pink) 55%, white);
+    --shadow: 0 1px 3px rgba(20,20,26,0.06), 0 1px 2px rgba(20,20,26,0.04);
+    --logo-bg: #14141a;
+    --logo-text: #ffffff;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #0b0b0d;
+    --bg-soft: #141417;
+    --panel: #17171b;
+    --border: #2a2a30;
+    --text: #f4f3f6;
+    --muted: #a49fae;
+    --accent: var(--rw-pink);
+    --accent-contrast: #14141a;
+    --accent-bg: color-mix(in srgb, var(--rw-pink) 22%, #17171b);
+    --best-bg: color-mix(in srgb, var(--rw-teal) 22%, #17171b);
+    --warn-bg: color-mix(in srgb, var(--rw-pink) 16%, #17171b);
+    --warn-border: color-mix(in srgb, var(--rw-pink) 45%, #17171b);
+    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+    --logo-bg: #ffffff;
+    --logo-text: #14141a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    /* Helvetica Now é a fonte da marca (fontes licenciadas via @font-face
+       entram aqui quando disponíveis); no navegador cai pro Helvetica/Arial
+       do sistema, que é visualmente muito próximo. */
+    font-family: "Helvetica Now Text", "Helvetica Now", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px; height: 40px;
+    background: var(--logo-bg);
+    color: var(--logo-text);
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.5px;
+  }
+  .brand-row { display: flex; align-items: center; gap: 12px; }
+  .brand-title { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+  /* Switch dia/noite — trilho vira céu azul com nuvens (claro) ou
+     céu escuro com estrelas (escuro), com um "sol/lua" que desliza. */
+  .day-night-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
+    border-radius: 999px;
+  }
+  .day-night-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .dn-track {
+    position: relative;
+    display: inline-block;
+    width: 64px;
+    height: 30px;
+    border-radius: 999px;
+    /* Dia: verde-água da marca. Troca pra roxo da marca à noite (ver regra
+       html[data-theme="dark"] .dn-track abaixo). */
+    background: linear-gradient(180deg, var(--rw-teal) 0%, var(--rw-teal-deep) 100%);
+    overflow: hidden;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.25);
+    transition: background 0.35s ease;
+  }
+  .dn-cloud {
+    position: absolute;
+    background: rgba(255,255,255,0.85);
+    border-radius: 999px;
+    transition: opacity 0.3s ease;
+  }
+  .dn-cloud-1 { width: 20px; height: 8px; top: 13px; right: 7px; }
+  .dn-cloud-2 { width: 13px; height: 6px; top: 19px; right: 15px; }
+  .dn-stars {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    background-image:
+      radial-gradient(1.4px 1.4px at 14px 8px, #fff, transparent),
+      radial-gradient(1.4px 1.4px at 22px 19px, #fff, transparent),
+      radial-gradient(1.1px 1.1px at 30px 9px, #fff, transparent),
+      radial-gradient(1.1px 1.1px at 38px 20px, #fff, transparent);
+  }
+  .dn-knob {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    /* Mesma dupla logo-bg/logo-text do selo "RW" do topo — inverte com o
+       tema sozinha, então a letra sempre tem contraste garantido. */
+    background: var(--logo-bg);
+    color: var(--logo-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+    transition: transform 0.35s ease, background 0.35s ease, color 0.35s ease;
+    z-index: 2;
+  }
+  html[data-theme="dark"] .dn-track {
+    background: linear-gradient(180deg, var(--rw-purple) 0%, var(--rw-purple-deep) 100%);
+  }
+  html[data-theme="dark"] .dn-cloud { opacity: 0; }
+  html[data-theme="dark"] .dn-stars { opacity: 1; }
+  html[data-theme="dark"] .dn-knob {
+    transform: translateX(34px);
+  }
+
+  h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.3px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+
+  /* Padrão estético do WMS de Brindes (aplicado 02/09/2026, a pedido do
+     Juan) — "eyebrow" em teal acima do título, cards de indicador e
+     comparativo em formato de tabela com status por ponto colorido. Usa as
+     mesmas variáveis de cor do app (claro/escuro), sem inventar tokens novos. */
+  .eyebrow {
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--rw-teal-deep);
+    margin: 0 0 8px;
+  }
+  html[data-theme="dark"] .eyebrow { color: var(--rw-teal); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+  @media (max-width: 640px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+  .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .stat-label { font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .stat-value { font-size: 21px; font-weight: 800; color: var(--text); }
+  .stat-value .unit { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+  .stat-value.stat-teal { color: var(--rw-teal-deep); }
+  .stat-value.stat-purple { color: var(--rw-purple-deep); }
+  html[data-theme="dark"] .stat-value.stat-teal { color: var(--rw-teal); }
+  html[data-theme="dark"] .stat-value.stat-purple { color: var(--rw-purple); }
+
+  .notice {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+  .notice strong { display: block; margin-bottom: 4px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel h2 .num {
+    width: 20px; height: 20px;
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .panel h2 .num svg { width: 100%; height: 100%; }
+  .panel h2 .num-badge {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 640px) {
+    .grid, .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr 1fr; }
+  }
+
+  label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 5px;
+  }
+  input, select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--text);
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .field { margin-bottom: 14px; }
+  .static-value {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: var(--bg-soft);
+    color: var(--text);
+  }
+
+  .volumes-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+  }
+  .volumes-table th {
+    text-align: left;
+    font-size: 11.5px;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 0 8px 6px 0;
+  }
+  .volumes-table td { padding: 4px 8px 4px 0; }
+  .volumes-table input { padding: 7px 8px; font-size: 13.5px; }
+  .row-remove {
+    background: none; border: none; color: var(--rw-pink-deep); cursor: pointer;
+    font-size: 16px; line-height: 1; padding: 4px 8px;
+  }
+  .add-volume {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .add-volume:hover { background: var(--accent-bg); }
+
+  .cta-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border: none;
+    padding: 12px 22px;
+    font-size: 14.5px;
+    font-weight: 700;
+    font-family: inherit;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  button.primary:disabled { opacity: 0.6; cursor: default; }
+  button.primary:hover:not(:disabled) { background: var(--rw-pink); color: #14141a; }
+
+  .status-line { font-size: 13px; color: var(--muted); }
+
+  #resultados { display: none; }
+  .results-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .results-head {
+    display: grid;
+    grid-template-columns: 40px 1fr 100px 90px 120px;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-soft);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .results-head span:first-child { grid-column: span 2; }
+  .carrier-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 100px 90px 120px;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .carrier-row.best { background: var(--best-bg); }
+  .carrier-row .logo-dot {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: var(--logo-text);
+    background: var(--logo-bg);
+  }
+  .carrier-name { font-weight: 700; font-size: 14.5px; }
+  .carrier-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .price { font-size: 15px; font-weight: 800; text-align: right; }
+  .prazo { font-size: 13px; color: var(--muted); text-align: right; }
+  .status-dot-row { display: flex; align-items: center; justify-content: flex-end; gap: 7px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot-row.status-best { color: var(--rw-teal-deep); }
+  .status-dot-row.status-best .status-dot { background: var(--rw-teal-deep); }
+  html[data-theme="dark"] .status-dot-row.status-best { color: var(--rw-teal); }
+  html[data-theme="dark"] .status-dot-row.status-best .status-dot { background: var(--rw-teal); }
+  .status-dot-row.status-padrao { color: var(--muted); }
+  .status-dot-row.status-padrao .status-dot { background: var(--muted); }
+  .status-dot-row.status-erro { color: #c0392b; }
+  .status-dot-row.status-erro .status-dot { background: #c0392b; }
+  .loading-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 8px; font-size: 13.5px; color: var(--muted);
+  }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fade-in { animation: fadeIn 0.25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+
+  .arch-note {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-top: 10px;
+  }
+
+  .lookup-row { display: flex; gap: 10px; align-items: flex-end; }
+  .lookup-row .field { flex: 1; margin-bottom: 0; }
+  button.secondary {
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13.5px;
+    font-family: inherit;
+    padding: 9px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.secondary:hover:not(:disabled) { background: var(--accent-bg); }
+  button.secondary:disabled { opacity: 0.6; cursor: default; }
+  .lookup-status { font-size: 12.5px; color: var(--muted); margin-top: 8px; min-height: 16px; }
+  .lookup-status.ok { color: var(--rw-teal-deep); font-weight: 700; }
+  .tag-sankhya {
+    display: inline-block;
+    background: var(--accent-bg);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 5px;
+    margin-left: 6px;
+  }
+
+  /* Tela de entrada e login foram removidas (02/09/2026, a pedido do Juan) —
+     o link vai direto pro motor de cotação, sem tela intermediária. */
+
+  /* ===================================================================
+     App shell — barra lateral (referência mandada pelo Juan) + conteúdo.
+     Usa as mesmas variáveis de cor do tema claro/escuro já existentes, pra
+     a barra lateral "combinar" com o resto da ferramenta.
+     =================================================================== */
+  .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
+  .sidebar {
+    width: 224px;
+    flex-shrink: 0;
+    background: var(--bg-soft);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 14px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .sidebar-top { margin-bottom: 24px; padding: 0 4px; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .sidebar-item:hover { background: var(--accent-bg); color: var(--text); }
+  .sidebar-item.active { background: var(--accent-bg); color: var(--accent); }
+  .sidebar-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sidebar-bottom .day-night-toggle { padding-left: 4px; }
+  .app-main { flex: 1; min-width: 0; padding: 32px 16px 80px; }
+  @media (max-width: 720px) {
+    .app-shell { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      height: auto;
+      position: static;
+      flex-direction: row;
+      align-items: center;
+      overflow-x: auto;
+    }
+    .sidebar-top { margin-bottom: 0; margin-right: 8px; }
+    .sidebar-nav { flex-direction: row; flex: 0 0 auto; }
+    .sidebar-bottom {
+      flex-direction: row;
+      border-top: none;
+      border-left: 1px solid var(--border);
+      padding: 0 0 0 14px;
+      margin-left: 8px;
+      flex: 1;
+      justify-content: flex-end;
+    }
+  }
+
+  /* ===== Cadastro de caixas ===== */
+  .caixa-row {
+    display: grid;
+    grid-template-columns: 1fr 70px 70px 70px auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  .caixa-row:last-child { border-bottom: none; }
+  .caixa-row .caixa-medida { color: var(--muted); text-align: center; white-space: nowrap; }
+  @media (max-width: 640px) {
+    .caixa-row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== App (motor de cotação) ===================== -->
+<!-- Sem tela de entrada: o link já abre direto aqui (02/09/2026, a pedido do Juan). -->
+<div id="screen-app" class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-top" style="display:flex; align-items:center; gap:10px;">
+      <span class="logo-mark">RW</span>
+      <div style="line-height:1.25;">
+        <div style="font-size:12.5px; font-weight:800; color:var(--text);">Rare Way</div>
+        <div style="font-size:9.5px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted);">Motor de Cotação</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <button type="button" class="sidebar-item active" data-view="cotacao">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg>
+        Cotação
+      </button>
+      <button type="button" class="sidebar-item" data-view="caixas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>
+        Cadastro de caixas
+      </button>
+    </nav>
+    <div class="sidebar-bottom">
+      <button type="button" class="day-night-toggle" id="btn-theme" aria-label="Alternar modo claro/escuro">
+        <span class="dn-track">
+          <span class="dn-cloud dn-cloud-1"></span>
+          <span class="dn-cloud dn-cloud-2"></span>
+          <span class="dn-stars"></span>
+          <span class="dn-knob"><span class="dn-knob-letter">R</span></span>
+        </span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="app-main">
+    <!-- ===== Tela: Cotação (a ferramenta original) ===== -->
+    <div id="view-cotacao" class="app-view">
+      <div class="wrap">
+
+        <p class="eyebrow">Rare Way Cosméticos</p>
+        <h1>Cotação de frete — protótipo</h1>
+        <p class="subtitle">Digite os dados do envio uma vez e compare as transportadoras ao mesmo tempo</p>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">Peso total</div>
+            <div class="stat-value" id="stat-peso">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Valor da mercadoria</div>
+            <div class="stat-value" id="stat-valor">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Transportadoras</div>
+            <div class="stat-value stat-purple" id="stat-transportadoras">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Melhor cotação</div>
+            <div class="stat-value stat-teal" id="stat-melhor">—</div>
+          </div>
+        </div>
+
+        <div class="notice">
+          <strong>✅ Cotação real — Jamef e Braspress consultadas ao vivo.</strong>
+          As duas chamadas abaixo já vão para as APIs de verdade por trás de um backend seguro (as senhas ficam só no servidor, nunca no navegador). Jamef e Braspress já rodam em <strong>produção</strong> (dados reais). A <strong>Rodonaves ainda não está incluída</strong> — sem resposta da transportadora sobre o acesso à API; assim que chegar, é só adicionar mais um item na lista de transportadoras, igual às outras duas. A busca de cliente pelo Sankhya abaixo continua simulada por enquanto.
+        </div>
+
+        <div class="panel">
+          <h2>Remetente <span class="tag-sankhya" style="margin-left:8px;">fixo — mesma origem em todas as cotações</span></h2>
+          <div class="grid cols-2">
+            <div class="field">
+              <label>Razão social</label>
+              <div class="static-value">NP Indústria e Comércio de Cosméticos Ltda</div>
+            </div>
+            <div class="field">
+              <label>CNPJ</label>
+              <div class="static-value">08.133.243/0001-00</div>
+            </div>
+          </div>
+          <div class="grid cols-3">
+            <div class="field">
+              <label>CEP de origem</label>
+              <div class="static-value">31030-370</div>
+            </div>
+            <div class="field" style="grid-column: span 2;">
+              <label>Endereço</label>
+              <div class="static-value">Rua Petrolina, 331, loja 3 - Sagrada Família - Belo Horizonte/MG</div>
+            </div>
+          </div>
+          <p class="arch-note">
+            Dados confirmados pelo Juan (01/09/2026) — são também os valores que devem estar cadastrados como <code>JAMEF_CNPJ_REMETENTE</code> / <code>JAMEF_CEP_ORIGEM</code> e <code>BRASPRESS_CNPJ_REMETENTE</code> / <code>BRASPRESS_CEP_ORIGEM</code> no backend. Quando as outras 2 empresas do grupo entrarem (Fase 5), este bloco vira um seletor de remetente, e cada empresa passa a ter sua própria origem e suas próprias credenciais por transportadora.
+          </p>
+        </div>
+
+        <div class="panel">
+          <h2><span class="num" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"></path></svg></span> Cliente (Sankhya)</h2>
+          <div class="lookup-row">
+            <div class="field">
+              <label>Código do parceiro (cod. parc)</label>
+              <input type="text" id="codParc" placeholder="Ex.: 1042">
+            </div>
+            <button type="button" class="secondary" id="btn-buscar-parc">Buscar no Sankhya</button>
+          </div>
+          <div class="lookup-status" id="lookup-status"></div>
+        </div>
+
+        <form id="form-cotacao">
+          <div class="panel">
+            <h2><span class="num" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"></path><path d="M6 10v9a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-9"></path></svg></span> Destinatário <span id="tag-sankhya" style="display:none;"><span class="tag-sankhya">preenchido pelo Sankhya — edite se a entrega for em outro endereço</span></span></h2>
+            <div class="grid cols-2">
+              <div class="field">
+                <label>Razão social</label>
+                <input type="text" id="razaoSocial" placeholder="Preenchido ao buscar o cliente">
+              </div>
+              <div class="field">
+                <label>CNPJ ou CPF do destinatário</label>
+                <input type="text" id="cnpjDest" placeholder="00.000.000/0000-00" required>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; margin: -6px 0 14px;">
+              <button type="button" class="secondary" id="btn-buscar-cnpj">Buscar dados pelo CNPJ</button>
+              <span class="lookup-status" id="lookup-status-cnpj" style="margin:0;">Use quando o cliente ainda não está cadastrado no Sankhya (consulta pública na Receita Federal via CNPJá).</span>
+            </div>
+            <div class="grid cols-3">
+              <div class="field">
+                <label>CEP de destino</label>
+                <input type="text" id="cepDest" placeholder="00000-000" required>
+              </div>
+              <div class="field" style="grid-column: span 2;">
+                <label>Endereço</label>
+                <input type="text" id="endDest" placeholder="Rua, número, bairro">
+              </div>
+            </div>
+            <div class="grid cols-3">
+              <div class="field">
+                <label>Cidade / UF</label>
+                <input type="text" id="cidadeDest" placeholder="Cidade - UF">
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2><span class="num" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg></span> Carga</h2>
+            <div class="grid cols-3">
+              <div class="field">
+                <label>Valor da mercadoria (R$)</label>
+                <input type="number" id="valorMerc" placeholder="0,00" step="0.01" required>
+              </div>
+              <div class="field">
+                <label>Peso total (kg)</label>
+                <input type="number" id="pesoTotal" placeholder="0,00" step="0.01" required>
+              </div>
+              <div class="field">
+                <label>Tipo de frete</label>
+                <select id="tipoFrete">
+                  <option value="CIF">CIF (remetente paga)</option>
+                  <option value="FOB">FOB (destinatário paga)</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid cols-3">
+              <div class="field">
+                <label>Modal</label>
+                <select id="modalEnvio">
+                  <option value="rodoviario">Rodoviário</option>
+                  <option value="aereo">Aéreo</option>
+                  <option value="ambos">Rodoviário + Aéreo (comparar os dois)</option>
+                </select>
+              </div>
+            </div>
+
+            <label style="margin-top: 6px;">Volumes</label>
+            <table class="volumes-table" id="tabela-volumes">
+              <thead>
+                <tr>
+                  <th>Tipo de caixa</th>
+                  <th>Qtd.</th>
+                  <th>Comprimento (cm)</th>
+                  <th>Largura (cm)</th>
+                  <th>Altura (cm)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="volumes-body">
+                <tr>
+                  <td><select class="v-tipo"></select></td>
+                  <td><input type="number" class="v-qtd" placeholder="1" value="1"></td>
+                  <td><input type="number" class="v-comp" placeholder="cm"></td>
+                  <td><input type="number" class="v-larg" placeholder="cm"></td>
+                  <td><input type="number" class="v-alt" placeholder="cm"></td>
+                  <td><button type="button" class="row-remove" title="Remover">✕</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button type="button" class="add-volume" id="btn-add-volume">+ Adicionar volume</button>
+            <p class="arch-note" id="nota-caixas">
+              As caixas do seletor acima vêm da tela "Cadastro de caixas" na barra lateral.
+            </p>
+          </div>
+
+          <div class="cta-row">
+            <button type="submit" class="primary" id="btn-cotar">Cotar transportadoras</button>
+            <button type="button" class="secondary" id="btn-limpar">Apagar informações</button>
+            <span class="status-line" id="status-line"></span>
+          </div>
+        </form>
+
+        <div class="panel fade-in" id="resultados" style="margin-top: 20px;">
+          <h2><span class="num-badge">✓</span> Comparativo de cotações</h2>
+          <div class="results-table">
+            <div class="results-head"><span>Transportadora</span><span>Prazo</span><span>Valor</span><span>Status</span></div>
+            <div id="lista-resultados"></div>
+          </div>
+          <p class="arch-note">
+            Como funciona por trás: ao clicar em "Cotar", o formulário dispara <strong>uma chamada em paralelo por transportadora (e por modal escolhido)</strong> — não uma atrás da outra. Cada uma responde no seu próprio tempo (normalmente 1 a 3 segundos), e assim que todas voltam, a tela monta a tabela ordenada da mais barata pra mais cara. O tempo total de espera é o da mais lenta, não a soma de todas. A lista de transportadoras abaixo é um array de configuração — adicionar a #4, #5... #23 é só acrescentar um item nele; o formulário e esta tela não mudam.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== Tela: Cadastro de caixas ===== -->
+    <div id="view-caixas" class="app-view" hidden>
+      <div class="wrap">
+        <h1>Cadastro de caixas padrão</h1>
+        <p class="subtitle">Essas são as caixas que aparecem pra escolher na tela de Cotação.</p>
+
+        <div class="panel" id="painel-caixas-status"></div>
+
+        <div class="panel">
+          <h2 id="titulo-form-caixa">Nova caixa</h2>
+          <form id="form-caixa">
+            <div class="grid cols-2">
+              <div class="field" style="grid-column: span 2;">
+                <label>Nome da caixa</label>
+                <input type="text" id="caixaNome" placeholder="Ex.: Caixa 280" required>
+              </div>
+            </div>
+            <div class="grid cols-3">
+              <div class="field">
+                <label>Altura (cm)</label>
+                <input type="number" id="caixaAltura" step="0.1" required>
+              </div>
+              <div class="field">
+                <label>Largura (cm)</label>
+                <input type="number" id="caixaLargura" step="0.1" required>
+              </div>
+              <div class="field">
+                <label>Comprimento (cm)</label>
+                <input type="number" id="caixaComprimento" step="0.1" required>
+              </div>
+            </div>
+            <div class="cta-row" style="margin-top: 4px;">
+              <button type="submit" class="primary" id="btn-salvar-caixa">Cadastrar caixa</button>
+              <button type="button" class="secondary" id="btn-cancelar-edicao-caixa" hidden>Cancelar edição</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>Caixas cadastradas</h2>
+          <div id="lista-caixas"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const root = document.documentElement;
+
+  // ================= Modo claro / escuro =================
+  // Sem localStorage (não é permitido em artefatos) — a escolha vale só
+  // pra sessão atual da página; a página abre no tema do sistema por padrão.
+  const btnTheme = document.getElementById('btn-theme');
+  const dnKnobLetter = document.querySelector('.dn-knob-letter');
+
+  function aplicarTema(tema) {
+    root.dataset.theme = tema;
+    btnTheme.setAttribute('aria-pressed', tema === 'dark' ? 'true' : 'false');
+    // Bolinha à esquerda (modo claro) = "R"; à direita (modo escuro) = "W" — as duas metades do "RW".
+    dnKnobLetter.textContent = tema === 'dark' ? 'W' : 'R';
+  }
+  aplicarTema(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  btnTheme.addEventListener('click', () => {
+    aplicarTema(root.dataset.theme === 'dark' ? 'light' : 'dark');
+  });
+
+  // Escapa texto antes de jogar dentro de innerHTML — usado em qualquer valor
+  // que venha de uma API externa (protocolo, mensagem de erro, nome de
+  // caixa), pra nunca deixar HTML/script de resposta nenhuma virar código na
+  // página.
+  function escapeHtml(texto) {
+    return String(texto ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  // ================= Navegação da barra lateral =================
+  document.querySelectorAll('.sidebar-item[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sidebar-item[data-view]').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.app-view').forEach((v) => { v.hidden = true; });
+      document.getElementById(`view-${btn.dataset.view}`).hidden = false;
+    });
+  });
+
+  // ================= Caixas padrão (seletor de volumes) =================
+  // Lista carregada de /api/caixas (guardada no Vercel KV, quando
+  // conectado) — o array abaixo é só o valor inicial/fallback, enquanto a
+  // chamada não volta (ou se o KV não estiver configurado).
+  let CAIXAS_PADRAO = [
+    { id: '280', nome: 'Caixa 280', altura: 29, largura: 40, comprimento: 40 },
+    { id: '150', nome: 'Caixa 150', altura: 31, largura: 42, comprimento: 33 },
+    { id: '112', nome: 'Caixa 112', altura: 16, largura: 40, comprimento: 40 },
+    { id: '66', nome: 'Caixa 66', altura: 15, largura: 29, comprimento: 36 },
+    { id: '46', nome: 'Caixa 46', altura: 14, largura: 23, comprimento: 32 },
+    { id: '25', nome: 'Caixa 25', altura: 9, largura: 18, comprimento: 28 },
+  ];
+  let caixasPersistentes = false;
+
+  function opcoesCaixasHtml() {
+    return '<option value="custom">Personalizada (informar medidas)</option>' +
+      CAIXAS_PADRAO.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.nome)}</option>`).join('');
+  }
+
+  function ligarSeletorCaixa(tr) {
+    const select = tr.querySelector('.v-tipo');
+    const comp = tr.querySelector('.v-comp');
+    const larg = tr.querySelector('.v-larg');
+    const alt = tr.querySelector('.v-alt');
+    select.innerHTML = opcoesCaixasHtml();
+    select.addEventListener('change', () => {
+      if (select.value === 'custom') {
+        [comp, larg, alt].forEach((input) => { input.readOnly = false; input.style.background = ''; });
+        return;
+      }
+      const caixa = CAIXAS_PADRAO.find((c) => c.id === select.value);
+      if (!caixa) return;
+      comp.value = caixa.comprimento;
+      larg.value = caixa.largura;
+      alt.value = caixa.altura;
+      [comp, larg, alt].forEach((input) => { input.readOnly = true; input.style.background = 'var(--bg-soft)'; });
+    });
+  }
+
+  function atualizarSelectsDeCaixa() {
+    document.querySelectorAll('.v-tipo').forEach((select) => {
+      const valorAtual = select.value;
+      select.innerHTML = opcoesCaixasHtml();
+      if ([...select.options].some((o) => o.value === valorAtual)) select.value = valorAtual;
+    });
+  }
+
+  async function carregarCaixas() {
+    try {
+      const resp = await fetch('/api/caixas', { headers: { 'Cache-Control': 'no-store' } });
+      const dados = await resp.json();
+      if (Array.isArray(dados.caixas)) CAIXAS_PADRAO = dados.caixas;
+      caixasPersistentes = Boolean(dados.persistente);
+    } catch {
+      // mantém o fallback fixo já carregado
+    }
+    atualizarSelectsDeCaixa();
+    renderizarListaCaixas();
+  }
+
+  const volumesBody = document.getElementById('volumes-body');
+  const btnAddVolume = document.getElementById('btn-add-volume');
+  ligarSeletorCaixa(volumesBody.querySelector('tr'));
+
+  function novaLinhaVolume() {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><select class="v-tipo"></select></td>
+      <td><input type="number" class="v-qtd" placeholder="1" value="1"></td>
+      <td><input type="number" class="v-comp" placeholder="cm"></td>
+      <td><input type="number" class="v-larg" placeholder="cm"></td>
+      <td><input type="number" class="v-alt" placeholder="cm"></td>
+      <td><button type="button" class="row-remove" title="Remover">✕</button></td>
+    `;
+    tr.querySelector('.row-remove').addEventListener('click', () => {
+      if (volumesBody.children.length > 1) tr.remove();
+    });
+    ligarSeletorCaixa(tr);
+    volumesBody.appendChild(tr);
+  }
+  btnAddVolume.addEventListener('click', novaLinhaVolume);
+  volumesBody.querySelector('.row-remove').addEventListener('click', () => {
+    if (volumesBody.children.length > 1) volumesBody.querySelector('tr').remove();
+  });
+
+  function coletarVolumes() {
+    const linhas = [...volumesBody.querySelectorAll('tr')];
+    return linhas.map((tr) => ({
+      qtd: parseFloat(tr.querySelector('.v-qtd').value) || 1,
+      comprimento: parseFloat(tr.querySelector('.v-comp').value) || 0,
+      largura: parseFloat(tr.querySelector('.v-larg').value) || 0,
+      altura: parseFloat(tr.querySelector('.v-alt').value) || 0,
+    }));
+  }
+
+  // ================= Cadastro de caixas (tela própria) =================
+  let caixaEditandoId = null;
+  const formCaixa = document.getElementById('form-caixa');
+  const btnSalvarCaixa = document.getElementById('btn-salvar-caixa');
+  const btnCancelarEdicaoCaixa = document.getElementById('btn-cancelar-edicao-caixa');
+  const tituloFormCaixa = document.getElementById('titulo-form-caixa');
+
+  function limparFormCaixa() {
+    caixaEditandoId = null;
+    formCaixa.reset();
+    btnSalvarCaixa.textContent = 'Cadastrar caixa';
+    tituloFormCaixa.textContent = 'Nova caixa';
+    btnCancelarEdicaoCaixa.hidden = true;
+  }
+  btnCancelarEdicaoCaixa.addEventListener('click', limparFormCaixa);
+
+  function renderizarListaCaixas() {
+    const painelStatus = document.getElementById('painel-caixas-status');
+    painelStatus.innerHTML = caixasPersistentes
+      ? '<p class="arch-note" style="margin:0;">✅ Cadastro conectado a um banco de dados (Vercel KV) — as caixas ficam salvas e valem pra qualquer pessoa que usar o motor.</p>'
+      : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ O cadastro ainda não está conectado a um banco de dados — as caixas abaixo são só o padrão de fábrica; cadastrar, editar ou remover não vai funcionar até isso ser configurado (aba "Storage" do projeto no Vercel, criar/conectar um banco KV). Enquanto isso, a tela de Cotação continua funcionando normalmente com essas medidas.</p>';
+
+    const lista = document.getElementById('lista-caixas');
+    lista.innerHTML = CAIXAS_PADRAO.map((c) => `
+      <div class="caixa-row">
+        <strong>${escapeHtml(c.nome)}</strong>
+        <span class="caixa-medida">A ${c.altura}cm</span>
+        <span class="caixa-medida">L ${c.largura}cm</span>
+        <span class="caixa-medida">C ${c.comprimento}cm</span>
+        <button type="button" class="secondary" data-editar="${escapeHtml(c.id)}">Editar</button>
+        <button type="button" class="secondary" data-remover="${escapeHtml(c.id)}" style="border-color:#c0392b; color:#c0392b;">Remover</button>
+      </div>
+    `).join('') || '<p class="arch-note" style="margin:0;">Nenhuma caixa cadastrada ainda.</p>';
+
+    lista.querySelectorAll('[data-editar]').forEach((btn) => btn.addEventListener('click', () => {
+      const caixa = CAIXAS_PADRAO.find((c) => c.id === btn.dataset.editar);
+      if (!caixa) return;
+      caixaEditandoId = caixa.id;
+      document.getElementById('caixaNome').value = caixa.nome;
+      document.getElementById('caixaAltura').value = caixa.altura;
+      document.getElementById('caixaLargura').value = caixa.largura;
+      document.getElementById('caixaComprimento').value = caixa.comprimento;
+      btnSalvarCaixa.textContent = 'Salvar alterações';
+      tituloFormCaixa.textContent = `Editando: ${caixa.nome}`;
+      btnCancelarEdicaoCaixa.hidden = false;
+      document.getElementById('caixaNome').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }));
+
+    lista.querySelectorAll('[data-remover]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!caixasPersistentes) { alert('Conecte um banco de dados (Vercel KV) antes de remover caixas — veja o aviso no topo desta tela.'); return; }
+      if (!confirm('Remover esta caixa da lista? Ela deixa de aparecer no seletor da tela de Cotação.')) return;
+      try {
+        const resp = await fetch('/api/caixas', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+          body: JSON.stringify({ id: btn.dataset.remover }),
+        });
+        const dados = await resp.json();
+        if (!resp.ok || dados.erro) throw new Error(dados.mensagem || 'Erro ao remover.');
+        CAIXAS_PADRAO = dados.caixas;
+        atualizarSelectsDeCaixa();
+        renderizarListaCaixas();
+      } catch (err) {
+        alert(err.message);
+      }
+    }));
+  }
+
+  formCaixa.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!caixasPersistentes) { alert('Conecte um banco de dados (Vercel KV) antes de cadastrar caixas — veja o aviso no topo desta tela.'); return; }
+    btnSalvarCaixa.disabled = true;
+    const corpo = {
+      id: caixaEditandoId,
+      nome: document.getElementById('caixaNome').value.trim(),
+      altura: parseFloat(document.getElementById('caixaAltura').value),
+      largura: parseFloat(document.getElementById('caixaLargura').value),
+      comprimento: parseFloat(document.getElementById('caixaComprimento').value),
+    };
+    try {
+      const resp = await fetch('/api/caixas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify(corpo),
+      });
+      const dados = await resp.json();
+      if (!resp.ok || dados.erro) throw new Error(dados.mensagem || 'Erro ao salvar.');
+      CAIXAS_PADRAO = dados.caixas;
+      atualizarSelectsDeCaixa();
+      limparFormCaixa();
+      renderizarListaCaixas();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btnSalvarCaixa.disabled = false;
+    }
+  });
+
+  // ================= Busca de cliente no Sankhya (SIMULADA por enquanto) =================
+  // Na versão real, isso chama a API do Sankhya com o cod. parc e traz
+  // razão social, CNPJ e endereço cadastrado — sem duplicar esse cadastro
+  // em nenhum lugar fora do ERP.
+  async function buscarClienteSankhya(codParc) {
+    await atrasoGenerico(600, 1200);
+    return {
+      razaoSocial: `Cliente Exemplo Ltda (cod. parc ${codParc})`,
+      cnpj: '12.345.678/0001-90',
+      cep: '04567-000',
+      endereco: 'Av. das Nações, 500 - Sala 2',
+      cidadeUf: 'São Paulo - SP',
+    };
+  }
+
+  function atrasoGenerico(min, max) {
+    return new Promise((resolve) => setTimeout(resolve, min + Math.random() * (max - min)));
+  }
+
+  const btnBuscarParc = document.getElementById('btn-buscar-parc');
+  const lookupStatus = document.getElementById('lookup-status');
+  const tagSankhya = document.getElementById('tag-sankhya');
+
+  btnBuscarParc.addEventListener('click', async () => {
+    const codParc = document.getElementById('codParc').value.trim();
+    if (!codParc) { lookupStatus.textContent = 'Informe o código do parceiro.'; return; }
+    btnBuscarParc.disabled = true;
+    lookupStatus.textContent = 'Buscando no Sankhya…';
+    lookupStatus.className = 'lookup-status';
+    const cliente = await buscarClienteSankhya(codParc);
+    document.getElementById('razaoSocial').value = cliente.razaoSocial;
+    document.getElementById('cnpjDest').value = cliente.cnpj;
+    document.getElementById('cepDest').value = cliente.cep;
+    document.getElementById('endDest').value = cliente.endereco;
+    document.getElementById('cidadeDest').value = cliente.cidadeUf;
+    lookupStatus.textContent = '✓ Dados trazidos do Sankhya — revise o endereço se a entrega for em outro local.';
+    lookupStatus.className = 'lookup-status ok';
+    tagSankhya.style.display = 'inline';
+    btnBuscarParc.disabled = false;
+  });
+
+  // --- Busca de destinatário só pelo CNPJ (quando não está no Sankhya) ---
+  // Consulta a API pública e gratuita da CNPJá (dados oficiais da Receita
+  // Federal) através do backend — não precisa de chave nem login.
+  const btnBuscarCnpj = document.getElementById('btn-buscar-cnpj');
+  const lookupStatusCnpj = document.getElementById('lookup-status-cnpj');
+
+  btnBuscarCnpj.addEventListener('click', async () => {
+    const cnpj = document.getElementById('cnpjDest').value.trim();
+    if (!cnpj) { lookupStatusCnpj.textContent = 'Informe o CNPJ do destinatário primeiro.'; lookupStatusCnpj.className = 'lookup-status'; return; }
+    btnBuscarCnpj.disabled = true;
+    lookupStatusCnpj.style.color = '';
+    lookupStatusCnpj.textContent = 'Buscando dados oficiais do CNPJ…';
+    lookupStatusCnpj.className = 'lookup-status';
+    try {
+      const resp = await fetch('/api/consulta-cnpj', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify({ cnpj }),
+      });
+      const dados = await resp.json();
+      if (!resp.ok || dados.erro) {
+        throw new Error(dados.mensagem || 'Não foi possível consultar esse CNPJ.');
+      }
+      document.getElementById('razaoSocial').value = dados.razaoSocial;
+      document.getElementById('cepDest').value = dados.cep;
+      document.getElementById('endDest').value = dados.endereco;
+      document.getElementById('cidadeDest').value = dados.cidadeUf;
+      lookupStatusCnpj.textContent = `✓ Dados oficiais encontrados (situação: ${dados.situacao || 'não informada'}) — revise antes de cotar.`;
+      lookupStatusCnpj.className = 'lookup-status ok';
+    } catch (err) {
+      lookupStatusCnpj.textContent = `Erro: ${err.message}`;
+      lookupStatusCnpj.className = 'lookup-status';
+      lookupStatusCnpj.style.color = '#c0392b';
+    } finally {
+      btnBuscarCnpj.disabled = false;
+    }
+  });
+
+  // ================= Adaptadores de transportadora =================
+  // Isto é o "array de configuração" citado na explicação: cada transportadora
+  // é um item isolado, com sua sigla pra exibição, os modais que ela atende,
+  // e a função que chama o backend (nunca o navegador, porque é lá que ficam
+  // as senhas). Adicionar a transportadora #4, #5... #23 é só acrescentar um
+  // item aqui — nada mais no formulário ou na tela de resultado muda.
+
+  // Chama uma função serverless do próprio backend (mesma origem — sem
+  // problema de CORS) que guarda a senha da transportadora e faz a chamada
+  // real pra API dela. Se der erro, joga uma exceção pra essa cotação
+  // aparecer como "erro" na tela, sem travar as outras transportadoras.
+  // Também tem um limite de tempo por chamada (Plano B Nível 1 da
+  // arquitetura): quem não responder a tempo sai do comparativo daquela
+  // rodada, sem travar as demais.
+  const TIMEOUT_COTACAO_MS = 20000;
+
+  async function cotarViaBackend(endpoint, dados, modal) {
+    const controlador = new AbortController();
+    const timer = setTimeout(() => controlador.abort(), TIMEOUT_COTACAO_MS);
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify({ ...dados, modal }),
+        signal: controlador.signal,
+      });
+      const json = await resp.json();
+      if (!resp.ok || json.erro) {
+        throw new Error(json.mensagem || `Erro ao consultar ${endpoint}`);
+      }
+      return { valor: json.valor, prazoDias: json.prazoDias, protocolo: json.protocolo || null };
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error(`Não respondeu em ${TIMEOUT_COTACAO_MS / 1000}s — tente de novo ou cote direto no portal da transportadora.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const TRANSPORTADORAS = [
+    {
+      nome: 'Braspress', sigla: 'BP', modais: ['rodoviario', 'aereo'],
+      cotar: (dados, modal) => cotarViaBackend('/api/braspress-cotar', dados, modal),
+    },
+    {
+      nome: 'Jamef', sigla: 'JM', modais: ['rodoviario'],
+      cotar: (dados, modal) => cotarViaBackend('/api/jamef-cotar', dados, modal),
+    },
+    // Rodonaves ainda não incluída — sem resposta da transportadora sobre o
+    // acesso à API. Assim que tivermos credenciais, é só adicionar mais um
+    // bloco igual aos acima (endpoint /api/rodonaves-cotar) — nenhuma outra
+    // parte do arquivo precisa mudar:
+    // {
+    //   nome: 'Rodonaves', sigla: 'RN', modais: ['rodoviario'],
+    //   cotar: (dados, modal) => cotarViaBackend('/api/rodonaves-cotar', dados, modal),
+    // },
+  ];
+
+  const form = document.getElementById('form-cotacao');
+  const btnCotar = document.getElementById('btn-cotar');
+  const btnLimpar = document.getElementById('btn-limpar');
+  const statusLine = document.getElementById('status-line');
+  const resultadosPanel = document.getElementById('resultados');
+  const listaResultados = document.getElementById('lista-resultados');
+
+  // ================= Apagar informações (pedido do Juan, 02/09/2026) =================
+  // Depois de uma cotação, pra começar a próxima rapidinho: limpa o cliente
+  // (Sankhya/CNPJ), o destinatário preenchido a partir dele, valor da
+  // mercadoria e peso, e some com o comparativo da cotação anterior. Não mexe
+  // no Remetente (é fixo, sempre o mesmo) nem nos volumes (tipo de caixa
+  // costuma se repetir de um envio pro outro).
+  btnLimpar.addEventListener('click', () => {
+    document.getElementById('codParc').value = '';
+    document.getElementById('razaoSocial').value = '';
+    document.getElementById('cnpjDest').value = '';
+    document.getElementById('cepDest').value = '';
+    document.getElementById('endDest').value = '';
+    document.getElementById('cidadeDest').value = '';
+    document.getElementById('valorMerc').value = '';
+    document.getElementById('pesoTotal').value = '';
+
+    lookupStatus.textContent = '';
+    lookupStatus.className = 'lookup-status';
+    lookupStatusCnpj.textContent = 'Use quando o cliente ainda não está cadastrado no Sankhya (consulta pública na Receita Federal via CNPJá).';
+    lookupStatusCnpj.className = 'lookup-status';
+    lookupStatusCnpj.style.color = '';
+    tagSankhya.style.display = 'none';
+
+    statusLine.textContent = '';
+    resultadosPanel.style.display = 'none';
+    listaResultados.innerHTML = '';
+    ['stat-peso', 'stat-valor', 'stat-transportadoras', 'stat-melhor'].forEach((id) => {
+      document.getElementById(id).textContent = '—';
+    });
+
+    document.getElementById('codParc').focus();
+  });
+
+  function modaisSolicitados() {
+    const escolha = document.getElementById('modalEnvio').value;
+    return escolha === 'ambos' ? ['rodoviario', 'aereo'] : [escolha];
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const dados = {
+      cnpjDest: document.getElementById('cnpjDest').value,
+      cepDest: document.getElementById('cepDest').value,
+      valorMerc: parseFloat(document.getElementById('valorMerc').value) || 0,
+      pesoTotal: parseFloat(document.getElementById('pesoTotal').value) || 0,
+      tipoFrete: document.getElementById('tipoFrete').value,
+      volumes: coletarVolumes(),
+    };
+    const modaisPedidos = modaisSolicitados();
+
+    // Monta a lista de chamadas: uma por transportadora × modal que ela atende
+    // e que foi pedido — isto é o "lote paralelo" que dispara de uma vez.
+    const chamadas = [];
+    TRANSPORTADORAS.forEach((t) => {
+      t.modais.filter((m) => modaisPedidos.includes(m)).forEach((modal) => {
+        chamadas.push({ transportadora: t, modal });
+      });
+    });
+
+    const textoOriginalBotao = btnCotar.textContent;
+    btnCotar.disabled = true;
+    btnCotar.textContent = 'Consultando…';
+    statusLine.textContent = `Consultando ${chamadas.length} cotações em paralelo…`;
+    resultadosPanel.style.display = 'block';
+    listaResultados.innerHTML = chamadas.map((c) => `
+      <div class="loading-row"><div class="spinner"></div> ${c.transportadora.nome} (${c.modal === 'aereo' ? 'aéreo' : 'rodoviário'})</div>
+    `).join('');
+    resultadosPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    const inicio = performance.now();
+
+    // Todas as chamadas acontecem ao mesmo tempo. Usa allSettled (não all)
+    // pra uma transportadora com erro não derrubar as respostas das outras.
+    const settled = await Promise.allSettled(
+      chamadas.map((c) => c.transportadora.cotar(dados, c.modal).then((r) => ({ ...r, transportadora: c.transportadora, modal: c.modal })))
+    );
+
+    const duracao = ((performance.now() - inicio) / 1000).toFixed(1);
+
+    const respostas = settled.filter((s) => s.status === 'fulfilled').map((s) => s.value);
+    const erros = settled
+      .map((s, i) => ({ s, chamada: chamadas[i] }))
+      .filter((x) => x.s.status === 'rejected')
+      .map((x) => ({ transportadora: x.chamada.transportadora, modal: x.chamada.modal, mensagem: x.s.reason?.message || 'Erro desconhecido' }));
+
+    statusLine.textContent = `${respostas.length} resposta(s) recebida(s) em ${duracao}s${erros.length ? `, ${erros.length} com erro` : ''} (tempo da mais lenta, não a soma de todas).`;
+
+    respostas.sort((a, b) => a.valor - b.valor);
+
+    // Faixa de indicadores no topo (padrão estético do WMS de Brindes) —
+    // só números que já estavam na tela, resumidos aqui pra visão rápida.
+    document.getElementById('stat-peso').innerHTML = dados.pesoTotal > 0 ? `${String(dados.pesoTotal).replace('.', ',')}<span class="unit"> kg</span>` : '—';
+    document.getElementById('stat-valor').textContent = dados.valorMerc > 0 ? `R$ ${dados.valorMerc.toFixed(2).replace('.', ',')}` : '—';
+    document.getElementById('stat-transportadoras').textContent = respostas.length || '—';
+    document.getElementById('stat-melhor').textContent = respostas.length ? `R$ ${respostas[0].valor.toFixed(2).replace('.', ',')}` : '—';
+
+    listaResultados.innerHTML = respostas.map((r, i) => `
+      <div class="carrier-row ${i === 0 ? 'best' : ''} fade-in">
+        <div class="logo-dot">${r.transportadora.sigla}</div>
+        <div>
+          <div class="carrier-name">${r.transportadora.nome}</div>
+          <div class="carrier-sub">Frete ${dados.tipoFrete} · ${r.modal === 'aereo' ? 'Aéreo' : 'Rodoviário'}${r.protocolo ? ` · Protocolo: <strong>${escapeHtml(r.protocolo)}</strong>` : ''}${dados.valorMerc > 0 ? ` · ${((r.valor / dados.valorMerc) * 100).toFixed(1).replace('.', ',')}% do pedido` : ''}</div>
+        </div>
+        <div class="prazo">${r.prazoDias} dia${r.prazoDias > 1 ? 's' : ''} úteis</div>
+        <div class="price">R$ ${r.valor.toFixed(2).replace('.', ',')}</div>
+        <div class="status-dot-row ${i === 0 ? 'status-best' : 'status-padrao'}"><span class="status-dot"></span>${i === 0 ? 'Mais barato' : 'Padrão'}</div>
+      </div>
+    `).join('') + erros.map((e) => `
+      <div class="carrier-row fade-in">
+        <div class="logo-dot">⚠</div>
+        <div>
+          <div class="carrier-name">${e.transportadora.nome}</div>
+          <div class="carrier-sub" style="color:#c0392b;">Erro: ${escapeHtml(e.mensagem)}</div>
+        </div>
+        <div class="prazo">—</div>
+        <div class="price">—</div>
+        <div class="status-dot-row status-erro"><span class="status-dot"></span>Erro</div>
+      </div>
+    `).join('');
+
+    btnCotar.textContent = textoOriginalBotao;
+    btnCotar.disabled = false;
+  });
+
+  // ================= Ponto de entrada =================
+  // Sem tela de entrada nem login: o motor já é a única coisa que existe na
+  // página, então só falta carregar a lista de caixas assim que a página abre.
+  carregarCaixas();
+</script>
+</body>
+</html>

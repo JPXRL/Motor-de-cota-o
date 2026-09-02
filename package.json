@@ -1,0 +1,6 @@
+{
+  "name": "motor-cotacao-frete-rareway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Motor de cotação de frete RARE WAY — frontend estático + funções serverless para Jamef e Braspress"
+}
