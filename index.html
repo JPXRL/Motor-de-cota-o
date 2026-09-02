@@ -1196,8 +1196,74 @@
     return escolha === 'ambos' ? ['rodoviario', 'aereo'] : [escolha];
   }
 
+  // ================= Validação antes de cotar (pedido do Juan, 02/09/2026) =================
+  // Depois de uma cotação real ter disparado um erro na Braspress por causa de
+  // um engano de digitação (peso de 3.537kg pra uma mercadoria de R$ 6,60), a
+  // ideia é travar esse tipo de coisa ANTES de gastar uma chamada real e paga
+  // pra Jamef/Braspress — em vez de descobrir só depois que a transportadora
+  // recusou. Verifica só o que dá pra verificar com certeza (formato de CEP,
+  // dígito verificador do CNPJ, números maiores que zero) — não tenta advinhar
+  // se a combinação peso/valor "faz sentido", porque isso varia demais de
+  // envio pra envio pra travar sozinho.
+  function soNumeros(v) {
+    return String(v || '').replace(/\D/g, '');
+  }
+
+  function cnpjValido(cnpjBruto) {
+    const cnpj = soNumeros(cnpjBruto);
+    if (cnpj.length !== 14) return false;
+    if (/^(\d)\1{13}$/.test(cnpj)) return false; // todos os dígitos iguais (00000000000000 etc.)
+
+    function digitoVerificador(base, pesos) {
+      const soma = base.split('').reduce((acc, digito, i) => acc + Number(digito) * pesos[i], 0);
+      const resto = soma % 11;
+      return resto < 2 ? 0 : 11 - resto;
+    }
+
+    const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const d1 = digitoVerificador(cnpj.slice(0, 12), pesos1);
+    const d2 = digitoVerificador(cnpj.slice(0, 12) + d1, pesos2);
+    return cnpj === cnpj.slice(0, 12) + String(d1) + String(d2);
+  }
+
+  function validarDadosCotacao() {
+    const erros = [];
+    const cnpjDest = document.getElementById('cnpjDest').value;
+    const cepDest = document.getElementById('cepDest').value;
+    const valorMerc = parseFloat(document.getElementById('valorMerc').value);
+    const pesoTotal = parseFloat(document.getElementById('pesoTotal').value);
+    const volumes = coletarVolumes();
+
+    if (!cnpjValido(cnpjDest)) {
+      erros.push('CNPJ do destinatário inválido — confira os números digitados.');
+    }
+    if (soNumeros(cepDest).length !== 8) {
+      erros.push('CEP de destino precisa ter 8 dígitos.');
+    }
+    if (!(valorMerc > 0)) {
+      erros.push('Valor da mercadoria precisa ser maior que zero.');
+    }
+    if (!(pesoTotal > 0)) {
+      erros.push('Peso total precisa ser maior que zero.');
+    }
+    const volumeInvalido = volumes.some((v) => !(v.qtd > 0) || !(v.comprimento > 0) || !(v.largura > 0) || !(v.altura > 0));
+    if (volumes.length === 0 || volumeInvalido) {
+      erros.push('Cada volume precisa ter quantidade, comprimento, largura e altura maiores que zero.');
+    }
+    return erros;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    const errosValidacao = validarDadosCotacao();
+    if (errosValidacao.length) {
+      statusLine.textContent = '⚠ ' + errosValidacao.join(' ');
+      statusLine.style.color = '#c0392b';
+      return;
+    }
+    statusLine.style.color = '';
 
     const dados = {
       cnpjDest: document.getElementById('cnpjDest').value,
