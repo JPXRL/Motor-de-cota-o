@@ -1,64 +1,83 @@
-// Serverless function: guarda um registro simples de cada cotação feita no
-// motor (data/hora, cliente, peso/valor informados, e o resultado de cada
-// transportadora consultada) — só pra dar visibilidade de uso (quantas
-// cotações por dia, quem ganhou mais, se os valores estão subindo). NÃO
-// substitui o Sankhya como fonte da verdade (ver motor-cotacao-frete-
-// arquitetura.md, seção "Arquitetura de dados") — é só um log de apoio da
-// versão interina, sem nenhuma decisão de negócio em cima dele.
+// Serverless function: guarda um registro de cada cotação feita no motor
+// (data/hora, cliente, peso/valor informados, transportadora vencedora, o
+// percentual que o frete representa sobre o valor do pedido, e o resultado
+// bruto de cada transportadora consultada) — pra dar visibilidade de uso
+// (quantas cotações por dia, quem ganha mais, se os valores/percentuais
+// estão subindo) e permitir consulta com SQL de verdade (relatórios, médias,
+// filtros por período/transportadora, etc.). NÃO substitui o Sankhya como
+// fonte da verdade (ver motor-cotacao-frete-arquitetura.md, seção
+// "Arquitetura de dados") — é só um log de apoio da versão interina, sem
+// nenhuma decisão de negócio em cima dele.
 //
-// Guardado no mesmo banco Vercel KV usado pelo cadastro de caixas (api/
-// caixas.js). Se o KV ainda não estiver conectado a este projeto, o registro
-// é simplesmente descartado (a cotação em si continua funcionando
-// normalmente) — conectar um banco KV na aba "Storage" do projeto no Vercel
-// resolve isso pro cadastro de caixas E pro histórico ao mesmo tempo.
+// Guardado no mesmo banco Postgres usado pelo cadastro de caixas (api/
+// caixas.js). Se o banco ainda não estiver conectado a este projeto, o
+// registro é simplesmente descartado (a cotação em si continua funcionando
+// normalmente) — conectar um banco Postgres na aba "Storage" do projeto no
+// Vercel resolve isso pro cadastro de caixas E pro histórico ao mesmo tempo.
 
-const CHAVE_KV = 'rw_historico_cotacoes';
-const MAXIMO_REGISTROS = 500; // trava o tamanho pra não estourar limite do KV
+const { sql } = require('@vercel/postgres');
 
-function kvConfigurado() {
-  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+function bancoConfigurado() {
+  return Boolean(process.env.POSTGRES_URL);
 }
 
-async function kvChamar(caminho, opcoes) {
-  const resp = await fetch(`${process.env.KV_REST_API_URL}${caminho}`, {
-    ...opcoes,
-    headers: {
-      Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`,
-      ...(opcoes && opcoes.headers),
-    },
-  });
-  return resp.json();
-}
-
-async function lerHistorico() {
-  const resultado = await kvChamar(`/get/${CHAVE_KV}`);
-  if (!resultado || !resultado.result) return [];
-  try {
-    const lista = JSON.parse(resultado.result);
-    return Array.isArray(lista) ? lista : [];
-  } catch {
-    return [];
-  }
-}
-
-async function salvarHistorico(lista) {
-  await kvChamar(`/set/${CHAVE_KV}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(lista),
-  });
+async function garantirTabela() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS historico_cotacoes (
+      id SERIAL PRIMARY KEY,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      cliente TEXT,
+      cnpj_dest TEXT,
+      cidade_dest TEXT,
+      peso_total NUMERIC,
+      valor_merc NUMERIC,
+      tipo_frete TEXT,
+      melhor_transportadora TEXT,
+      melhor_valor NUMERIC,
+      melhor_percentual NUMERIC,
+      resultados JSONB,
+      erros JSONB
+    )
+  `;
 }
 
 module.exports = async (req, res) => {
   if (req.method === 'GET') {
-    if (!kvConfigurado()) {
+    if (!bancoConfigurado()) {
       res.status(200).json({ historico: [], persistente: false });
       return;
     }
     try {
-      const lista = await lerHistorico();
+      await garantirTabela();
       // Mais recente primeiro, limitado a 200 pra manter a resposta leve.
-      res.status(200).json({ historico: lista.slice(-200).reverse(), persistente: true });
+      const { rows } = await sql`
+        SELECT id, criado_em, cliente, cnpj_dest, cidade_dest, peso_total, valor_merc,
+               tipo_frete, melhor_transportadora, melhor_valor, melhor_percentual,
+               resultados, erros
+        FROM historico_cotacoes
+        ORDER BY criado_em DESC
+        LIMIT 200
+      `;
+      const historico = rows.map((r) => ({
+        id: r.id,
+        dataHora: r.criado_em,
+        cliente: r.cliente,
+        cnpjDest: r.cnpj_dest,
+        cidadeDest: r.cidade_dest,
+        pesoTotal: r.peso_total !== null ? Number(r.peso_total) : null,
+        valorMerc: r.valor_merc !== null ? Number(r.valor_merc) : null,
+        tipoFrete: r.tipo_frete,
+        melhor: r.melhor_transportadora
+          ? {
+              transportadora: r.melhor_transportadora,
+              valor: r.melhor_valor !== null ? Number(r.melhor_valor) : null,
+              percentual: r.melhor_percentual !== null ? Number(r.melhor_percentual) : null,
+            }
+          : null,
+        resultados: r.resultados || [],
+        erros: r.erros || [],
+      }));
+      res.status(200).json({ historico, persistente: true });
     } catch (err) {
       res.status(200).json({ historico: [], persistente: true, erro: true, mensagem: err.message });
     }
@@ -76,24 +95,38 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // Se o KV não estiver conectado, não é erro — só não guarda nada. A
+  // Se o banco não estiver conectado, não é erro — só não guarda nada. A
   // cotação em si já aconteceu e já foi mostrada na tela; perder o registro
   // de histórico não pode travar o fluxo principal.
-  if (!kvConfigurado()) {
+  if (!bancoConfigurado()) {
     res.status(200).json({ ok: true, guardado: false });
     return;
   }
 
   try {
+    await garantirTabela();
     const registro = req.body || {};
-    const lista = await lerHistorico();
-    lista.push({
-      ...registro,
-      id: String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8),
-      dataHora: new Date().toISOString(),
-    });
-    const listaLimitada = lista.slice(-MAXIMO_REGISTROS);
-    await salvarHistorico(listaLimitada);
+    const melhor = registro.melhor || null;
+    const percentual = melhor && registro.valorMerc ? (Number(melhor.valor) / Number(registro.valorMerc)) * 100 : null;
+
+    await sql`
+      INSERT INTO historico_cotacoes
+        (cliente, cnpj_dest, cidade_dest, peso_total, valor_merc, tipo_frete,
+         melhor_transportadora, melhor_valor, melhor_percentual, resultados, erros)
+      VALUES (
+        ${registro.cliente || null},
+        ${registro.cnpjDest || null},
+        ${registro.cidadeDest || null},
+        ${registro.pesoTotal || null},
+        ${registro.valorMerc || null},
+        ${registro.tipoFrete || null},
+        ${melhor ? melhor.transportadora : null},
+        ${melhor ? melhor.valor : null},
+        ${percentual},
+        ${JSON.stringify(registro.resultados || [])},
+        ${JSON.stringify(registro.erros || [])}
+      )
+    `;
     res.status(200).json({ ok: true, guardado: true });
   } catch (err) {
     // Falha ao guardar o histórico não deve incomodar o operador — a

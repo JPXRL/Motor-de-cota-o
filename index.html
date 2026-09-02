@@ -882,8 +882,8 @@
       const historico = Array.isArray(dados.historico) ? dados.historico : [];
 
       painelStatus.innerHTML = dados.persistente
-        ? '<p class="arch-note" style="margin:0;">✅ Histórico conectado a um banco de dados (Vercel KV) — mostrando as cotações mais recentes.</p>'
-        : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ O histórico ainda não está conectado a um banco de dados — as cotações feitas não estão sendo guardadas (aba "Storage" do projeto no Vercel, criar/conectar um banco KV). A tela de Cotação continua funcionando normalmente.</p>';
+        ? '<p class="arch-note" style="margin:0;">✅ Histórico conectado a um banco de dados (Postgres) — mostrando as cotações mais recentes.</p>'
+        : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ O histórico ainda não está conectado a um banco de dados — as cotações feitas não estão sendo guardadas (aba "Storage" do projeto no Vercel, criar/conectar um banco Postgres). A tela de Cotação continua funcionando normalmente.</p>';
 
       if (!historico.length) {
         lista.innerHTML = '<p class="arch-note" style="margin:0;">Nenhuma cotação registrada ainda.</p>';
@@ -906,7 +906,7 @@
               <span>${escapeHtml(h.cliente || h.cnpjDest || '—')}<br><span class="muted">${escapeHtml(h.cidadeDest || '')}</span></span>
               <span>${h.pesoTotal ? String(h.pesoTotal).replace('.', ',') + ' kg' : '—'}</span>
               <span>${h.valorMerc ? 'R$ ' + Number(h.valorMerc).toFixed(2).replace('.', ',') : '—'}</span>
-              <span>${h.melhor ? escapeHtml(h.melhor.transportadora) + ' · R$ ' + Number(h.melhor.valor).toFixed(2).replace('.', ',') : '—'}</span>
+              <span>${h.melhor ? escapeHtml(h.melhor.transportadora) + ' · R$ ' + Number(h.melhor.valor).toFixed(2).replace('.', ',') + (h.melhor.percentual != null ? ` (${Number(h.melhor.percentual).toFixed(1).replace('.', ',')}% do pedido)` : '') : '—'}</span>
               <span>${(h.resultados || []).length} ok${(h.erros || []).length ? `, ${h.erros.length} erro` : ''}</span>
             </div>
           `).join('')}
@@ -919,9 +919,9 @@
   }
 
   // ================= Caixas padrão (seletor de volumes) =================
-  // Lista carregada de /api/caixas (guardada no Vercel KV, quando
+  // Lista carregada de /api/caixas (guardada num banco Postgres, quando
   // conectado) — o array abaixo é só o valor inicial/fallback, enquanto a
-  // chamada não volta (ou se o KV não estiver configurado).
+  // chamada não volta (ou se o banco não estiver configurado).
   let CAIXAS_PADRAO = [
     { id: '280', nome: 'Caixa 280', altura: 29, largura: 40, comprimento: 40 },
     { id: '150', nome: 'Caixa 150', altura: 31, largura: 42, comprimento: 33 },
@@ -1032,8 +1032,8 @@
   function renderizarListaCaixas() {
     const painelStatus = document.getElementById('painel-caixas-status');
     painelStatus.innerHTML = caixasPersistentes
-      ? '<p class="arch-note" style="margin:0;">✅ Cadastro conectado a um banco de dados (Vercel KV) — as caixas ficam salvas e valem pra qualquer pessoa que usar o motor.</p>'
-      : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ O cadastro ainda não está conectado a um banco de dados — as caixas abaixo são só o padrão de fábrica; cadastrar, editar ou remover não vai funcionar até isso ser configurado (aba "Storage" do projeto no Vercel, criar/conectar um banco KV). Enquanto isso, a tela de Cotação continua funcionando normalmente com essas medidas.</p>';
+      ? '<p class="arch-note" style="margin:0;">✅ Cadastro conectado a um banco de dados (Postgres) — as caixas ficam salvas e valem pra qualquer pessoa que usar o motor.</p>'
+      : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ O cadastro ainda não está conectado a um banco de dados — as caixas abaixo são só o padrão de fábrica; cadastrar, editar ou remover não vai funcionar até isso ser configurado (aba "Storage" do projeto no Vercel, criar/conectar um banco Postgres). Enquanto isso, a tela de Cotação continua funcionando normalmente com essas medidas.</p>';
 
     const lista = document.getElementById('lista-caixas');
     lista.innerHTML = CAIXAS_PADRAO.map((c) => `
@@ -1062,7 +1062,7 @@
     }));
 
     lista.querySelectorAll('[data-remover]').forEach((btn) => btn.addEventListener('click', async () => {
-      if (!caixasPersistentes) { alert('Conecte um banco de dados (Vercel KV) antes de remover caixas — veja o aviso no topo desta tela.'); return; }
+      if (!caixasPersistentes) { alert('Conecte um banco de dados (Postgres) antes de remover caixas — veja o aviso no topo desta tela.'); return; }
       if (!confirm('Remover esta caixa da lista? Ela deixa de aparecer no seletor da tela de Cotação.')) return;
       try {
         const resp = await fetch('/api/caixas', {
@@ -1083,7 +1083,7 @@
 
   formCaixa.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!caixasPersistentes) { alert('Conecte um banco de dados (Vercel KV) antes de cadastrar caixas — veja o aviso no topo desta tela.'); return; }
+    if (!caixasPersistentes) { alert('Conecte um banco de dados (Postgres) antes de cadastrar caixas — veja o aviso no topo desta tela.'); return; }
     btnSalvarCaixa.disabled = true;
     const corpo = {
       id: caixaEditandoId,
@@ -1446,7 +1446,7 @@
 
     // ================= Histórico de cotações (log de apoio) =================
     // Dispara depois que a cotação já terminou e já apareceu na tela — se essa
-    // chamada falhar (ex.: KV não conectado), não pode travar nem atrasar o
+    // chamada falhar (ex.: banco não conectado), não pode travar nem atrasar o
     // operador, por isso não usa await e ignora qualquer erro em silêncio.
     fetch('/api/historico-cotacoes', {
       method: 'POST',
