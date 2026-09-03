@@ -178,17 +178,6 @@
   }
   html[data-theme="dark"] .eyebrow { color: var(--rw-teal); }
 
-  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
-  @media (max-width: 640px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
-  .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
-  .stat-label { font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .stat-value { font-size: 21px; font-weight: 800; color: var(--text); }
-  .stat-value .unit { font-size: 12.5px; font-weight: 700; color: var(--muted); }
-  .stat-value.stat-teal { color: var(--rw-teal-deep); }
-  .stat-value.stat-purple { color: var(--rw-purple-deep); }
-  html[data-theme="dark"] .stat-value.stat-teal { color: var(--rw-teal); }
-  html[data-theme="dark"] .stat-value.stat-purple { color: var(--rw-purple); }
-
   .notice {
     background: var(--warn-bg);
     border: 1px solid var(--warn-border);
@@ -586,25 +575,6 @@
         <p class="eyebrow">Rare Way Cosméticos</p>
         <h1>Cotação de frete — protótipo</h1>
         <p class="subtitle">Digite os dados do envio uma vez e compare as transportadoras ao mesmo tempo</p>
-
-        <div class="stat-grid">
-          <div class="stat-card">
-            <div class="stat-label">Peso total</div>
-            <div class="stat-value" id="stat-peso">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Valor da mercadoria</div>
-            <div class="stat-value" id="stat-valor">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Transportadoras</div>
-            <div class="stat-value stat-purple" id="stat-transportadoras">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Melhor cotação</div>
-            <div class="stat-value stat-teal" id="stat-melhor">—</div>
-          </div>
-        </div>
 
         <div class="notice">
           <strong>✅ Cotação real — Jamef e Braspress consultadas ao vivo.</strong>
@@ -1283,9 +1253,6 @@
     statusLine.textContent = '';
     resultadosPanel.style.display = 'none';
     listaResultados.innerHTML = '';
-    ['stat-peso', 'stat-valor', 'stat-transportadoras', 'stat-melhor'].forEach((id) => {
-      document.getElementById(id).textContent = '—';
-    });
 
     document.getElementById('codParc').focus();
   });
@@ -1412,13 +1379,6 @@
     statusLine.textContent = `${respostas.length} resposta(s) recebida(s) em ${duracao}s${erros.length ? `, ${erros.length} com erro` : ''} (tempo da mais lenta, não a soma de todas).`;
 
     respostas.sort((a, b) => a.valor - b.valor);
-
-    // Faixa de indicadores no topo (padrão estético do WMS de Brindes) —
-    // só números que já estavam na tela, resumidos aqui pra visão rápida.
-    document.getElementById('stat-peso').innerHTML = dados.pesoTotal > 0 ? `${String(dados.pesoTotal).replace('.', ',')}<span class="unit"> kg</span>` : '—';
-    document.getElementById('stat-valor').textContent = dados.valorMerc > 0 ? `R$ ${dados.valorMerc.toFixed(2).replace('.', ',')}` : '—';
-    document.getElementById('stat-transportadoras').textContent = respostas.length || '—';
-    document.getElementById('stat-melhor').textContent = respostas.length ? `R$ ${respostas[0].valor.toFixed(2).replace('.', ',')}` : '—';
 
     listaResultados.innerHTML = respostas.map((r, i) => `
       <div class="carrier-row ${i === 0 ? 'best' : ''} fade-in">
