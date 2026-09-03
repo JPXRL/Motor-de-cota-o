@@ -1,11 +1,10 @@
-// Serverless function: login por usuário/senha (uma conta por pessoa),
-// criando um cookie de sessão assinado. Ver o comentário completo em
-// middleware.js sobre como a sessão funciona e as variáveis de ambiente
-// necessárias (APP_USERS, SESSION_SECRET).
+// Verifica a senha de acesso unica e, se correta, gera um cookie de sessao
+// assinado (HMAC-SHA256, derivado da propria MOTOR_SENHA). Substitui o antigo
+// sistema multiusuario (APP_USERS/SESSION_SECRET), que foi removido.
 
 const { createHmac, timingSafeEqual } = require('crypto');
 
-const DURACAO_SESSAO_MS = 12 * 60 * 60 * 1000; // 12 horas — depois disso pede login de novo
+const DURACAO_SESSAO_MS = 12 * 60 * 60 * 1000; // 12 horas
 
 function comparacaoSegura(a, b) {
   const bufA = Buffer.from(String(a), 'utf-8');
@@ -21,67 +20,36 @@ function assinar(valor, segredo) {
   return createHmac('sha256', segredo).update(valor).digest('base64url');
 }
 
-// Formato recomendado do APP_USERS, pra evitar erro de digitação/colagem
-// numa caixinha de texto do Vercel: "usuario:senha,usuario:senha,...".
-// Também aceita o formato antigo em JSON ([{"usuario":"...","senha":"..."}])
-// caso já esteja configurado assim.
-function interpretarUsuarios(texto) {
-  const t = String(texto).trim();
-  if (t.startsWith('[')) {
-    try {
-      const lista = JSON.parse(t);
-      if (Array.isArray(lista)) {
-        const validos = lista.filter((u) => u && u.usuario && u.senha);
-        if (validos.length) return validos;
-      }
-    } catch {
-      // não era um JSON válido — cai pro formato simples abaixo
-    }
-  }
-  return t.split(',').map((par) => par.trim()).filter(Boolean).map((par) => {
-    const i = par.indexOf(':');
-    if (i < 0) return null;
-    return { usuario: par.slice(0, i).trim(), senha: par.slice(i + 1).trim() };
-  }).filter(Boolean);
-}
-
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
-    res.status(405).json({ erro: true, mensagem: 'Método não permitido' });
+    res.status(405).json({ erro: true, mensagem: 'Metodo nao permitido.' });
     return;
   }
+
   if (req.headers['x-requested-with'] !== 'motor-rareway') {
-    res.status(403).json({ erro: true, mensagem: 'Requisição não autorizada.' });
+    res.status(403).json({ erro: true, mensagem: 'Requisicao nao autorizada.' });
     return;
   }
 
-  const segredo = process.env.SESSION_SECRET;
-  const listaUsuarios = process.env.APP_USERS;
-
-  if (!segredo || !listaUsuarios) {
-    res.status(200).json({ erro: true, mensagem: 'Login ainda não configurado no backend (faltam as variáveis APP_USERS / SESSION_SECRET no Vercel).' });
+  const senhaConfigurada = process.env.MOTOR_SENHA;
+  if (!senhaConfigurada) {
+    res.status(200).json({ erro: true, mensagem: 'Controle de acesso ainda nao esta ativo neste site.' });
     return;
   }
 
-  const usuarios = interpretarUsuarios(listaUsuarios);
-  if (!usuarios.length) {
-    res.status(200).json({ erro: true, mensagem: 'A variável APP_USERS não tem nenhuma conta válida. Use o formato usuario:senha, separando várias contas por vírgula — ex.: admin:123789456,maria:outrasenha' });
-    return;
-  }
-
-  const { usuario, senha } = req.body || {};
-  const encontrado = usuarios.find((u) => u && u.usuario === usuario);
-  const senhaCorreta = encontrado ? comparacaoSegura(senha || '', encontrado.senha || '') : false;
-
-  if (!encontrado || !senhaCorreta) {
-    res.status(401).json({ erro: true, mensagem: 'Usuário ou senha inválidos.' });
+  const { senha } = req.body || {};
+  if (!comparacaoSegura(senha || '', senhaConfigurada)) {
+    res.status(401).json({ erro: true, mensagem: 'Senha incorreta.' });
     return;
   }
 
   const exp = Date.now() + DURACAO_SESSAO_MS;
-  const payload = Buffer.from(JSON.stringify({ usuario: encontrado.usuario, exp }), 'utf-8').toString('base64url');
-  const token = `${payload}.${assinar(payload, segredo)}`;
+  const payload = Buffer.from(JSON.stringify({ exp }), 'utf-8').toString('base64url');
+  const token = `${payload}.${assinar(payload, senhaConfigurada)}`;
 
-  res.setHeader('Set-Cookie', `rw_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.floor(DURACAO_SESSAO_MS / 1000)}`);
-  res.status(200).json({ ok: true, usuario: encontrado.usuario });
+  res.setHeader(
+    'Set-Cookie',
+    `motor_sessao=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.floor(DURACAO_SESSAO_MS / 1000)}`
+  );
+  res.status(200).json({ ok: true });
 };

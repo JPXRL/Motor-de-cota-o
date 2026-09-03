@@ -1,67 +1,100 @@
-// Vercel Edge Middleware — protege TODO o site (a página e as funções em
-// api/*) atrás de uma senha única compartilhada, usando o mecanismo nativo
-// do navegador (HTTP Basic Auth): sem tela de login própria, sem cookie de
-// sessão, sem conta por pessoa.
+// Vercel Edge Middleware — protege TODO o site (a pagina e as funcoes em
+// api/*) atras de uma senha unica compartilhada.
 //
-// Por quê essa versão e não a anterior: em 01/09/2026 foi feita uma versão
-// com tela de login própria + sessão por cookie + múltiplas contas, que não
-// funcionou de forma confiável ("nem por reza") e foi removida a pedido do
-// Juan. Em 02/09/2026, ele pediu pra reintroduzir algum controle de acesso,
-// mas explicitamente optando pela opção mais simples: uma senha única
-// compartilhada pra toda a equipe de expedição, sem repetir a complexidade
-// da versão anterior. Esta versão tem o menor número possível de partes
-// móveis — nenhum código escreve nem lê cookie, cada requisição só confere o
-// cabeçalho Authorization que o próprio navegador manda.
+// Historico: o sistema original de login individual (varias contas,
+// cookie de sessao) foi removido em 01/09/2026 a pedido do Juan porque
+// "nao funcionou de forma confiavel (nem por reza)". Foi substituido por
+// HTTP Basic Auth nativo do navegador (simples, sem tela propria).
 //
-// Efeito colateral conhecido (avisado ao Juan): o navegador mostra a
-// caixinha nativa dele pedindo usuário/senha (não uma tela bonita da RARE
-// WAY) — é a troca consciente por confiabilidade máxima.
-//
-// Configuração (Vercel → Project Settings → Environment Variables):
-//   MOTOR_SENHA = a senha que a equipe vai usar (defina o valor só lá,
-//                 nunca em código nem em chat).
-// Usuário fixo (não precisa cadastrar em lugar nenhum): rareway
-//
-// Enquanto MOTOR_SENHA não estiver cadastrada, o site funciona igual a hoje
-// (sem pedir senha) — assim publicar este arquivo não trava nada até o Juan
-// decidir ativar.
+// Agora a Basic Auth do navegador foi trocada por uma tela de login
+// customizada (login.html) com a identidade visual da RARE WAY, mantendo
+// o mesmo modelo de senha unica compartilhada — sem conta por pessoa.
+// A sessao e guardada num cookie assinado (HMAC-SHA256, chave derivada
+// da propria MOTOR_SENHA, sem variavel de ambiente nova), verificado aqui
+// com Web Crypto (o runtime de Edge nao tem o modulo "crypto" do Node).
 
 export const config = {
   matcher: ['/:path*'],
 };
 
-const USUARIO = 'rareway';
+const COOKIE_NAME = 'motor_sessao';
 
-function pedirSenha() {
-  return new Response('Autenticação necessária.', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Motor de Cotacao RARE WAY"' },
-  });
+function base64urlDecode(input) {
+  let b64 = input.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
-export default function middleware(request) {
-  const senhaConfigurada = process.env.MOTOR_SENHA;
+async function hmacKey(segredo) {
+  const enc = new TextEncoder();
+  return crypto.subtle.importKey(
+    'raw',
+    enc.encode(segredo),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  );
+}
 
-  // Sem senha cadastrada ainda no Vercel: não bloqueia nada (mesma lógica de
-  // "recurso novo não trava o que já funciona" usada em todo o projeto).
+async function verificarSessao(cabecalhoCookie, senhaConfigurada) {
+  if (!cabecalhoCookie) return false;
+  const match = cabecalhoCookie.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
+  if (!match) return false;
+
+  const token = decodeURIComponent(match[1]);
+  const ponto = token.lastIndexOf('.');
+  if (ponto < 0) return false;
+
+  const payloadB64 = token.slice(0, ponto);
+  const assinaturaB64 = token.slice(ponto + 1);
+
+  try {
+    const chave = await hmacKey(senhaConfigurada);
+    const assinaturaBytes = base64urlDecode(assinaturaB64);
+    const payloadBytes = new TextEncoder().encode(payloadB64);
+    const valido = await crypto.subtle.verify('HMAC', chave, assinaturaBytes, payloadBytes);
+    if (!valido) return false;
+
+    const jsonStr = new TextDecoder().decode(base64urlDecode(payloadB64));
+    const dados = JSON.parse(jsonStr);
+    if (!dados.exp || Date.now() > dados.exp) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export default async function middleware(request) {
+  const senhaConfigurada = process.env.MOTOR_SENHA;
   if (!senhaConfigurada) {
     return;
   }
 
-  const cabecalho = request.headers.get('authorization');
-  if (cabecalho && cabecalho.startsWith('Basic ')) {
-    try {
-      const decodificado = atob(cabecalho.slice(6));
-      const separador = decodificado.indexOf(':');
-      const usuario = decodificado.slice(0, separador);
-      const senha = decodificado.slice(separador + 1);
-      if (usuario === USUARIO && senha === senhaConfigurada) {
-        return;
-      }
-    } catch {
-      // Cabeçalho corrompido/ilegível — cai para pedir a senha de novo.
-    }
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // A propria pagina de login e o endpoint que a valida ficam sempre livres.
+  if (path === '/login.html' || path === '/api/login') {
+    return;
   }
 
-  return pedirSenha();
+  const autenticado = await verificarSessao(request.headers.get('cookie'), senhaConfigurada);
+  if (autenticado) {
+    return;
+  }
+
+  if (path.startsWith('/api/')) {
+    return new Response(JSON.stringify({ erro: true, mensagem: 'Nao autenticado.' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  const destino = new URL('/login.html', request.url);
+  destino.searchParams.set('next', path + url.search);
+  return Response.redirect(destino, 307);
 }
