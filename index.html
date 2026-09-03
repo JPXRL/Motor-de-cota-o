@@ -511,6 +511,34 @@
     .historico-row { grid-template-columns: 1fr 1fr; row-gap: 4px; }
   }
 
+  /* ===== Rastreio (linha do tempo de eventos) ===== */
+  .timeline-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .timeline-head {
+    display: grid;
+    grid-template-columns: 1.1fr 2fr 1.3fr;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-soft);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .timeline-row {
+    display: grid;
+    grid-template-columns: 1.1fr 2fr 1.3fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+  @media (max-width: 720px) {
+    .timeline-head { display: none; }
+    .timeline-row { grid-template-columns: 1fr; row-gap: 2px; }
+  }
+
   /* ===== Cadastro de caixas ===== */
   .caixa-row {
     display: grid;
@@ -545,6 +573,10 @@
       <button type="button" class="sidebar-item active" data-view="cotacao">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg>
         Cotação
+      </button>
+      <button type="button" class="sidebar-item" data-view="rastreio">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+        Rastreio
       </button>
       <button type="button" class="sidebar-item" data-view="caixas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>
@@ -735,6 +767,58 @@
       </div>
     </div>
 
+    <!-- ===== Tela: Rastreio (consulta ao vivo, sem histórico próprio) ===== -->
+    <div id="view-rastreio" class="app-view" hidden>
+      <div class="wrap">
+
+        <p class="eyebrow">Rare Way Cosméticos</p>
+        <h1>Rastreio de encomendas</h1>
+        <p class="subtitle">Consulte o status de um envio direto na Jamef ou na Braspress, sem precisar entrar no portal de cada uma</p>
+
+        <div class="notice">
+          <strong>ℹ Consulta ao vivo — esta tela não guarda nada.</strong>
+          Cada busca chama a transportadora na hora e mostra o resultado. A Jamef busca por número de CT-e (conhecimento) ou de nota fiscal; a Braspress busca por número de nota fiscal ou de pedido. <strong>O rastreio da Braspress ainda não foi confirmado com uma chamada real</strong> (só a cotação foi) — se o resultado vier estranho na primeira tentativa, é sinal de que o formato de resposta precisa de ajuste.
+        </div>
+
+        <div class="panel">
+          <h2>Buscar</h2>
+          <div class="grid cols-2">
+            <div class="field">
+              <label>Transportadora</label>
+              <select id="rastreio-transportadora">
+                <option value="jamef">Jamef</option>
+                <option value="braspress">Braspress</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Buscar por</label>
+              <select id="rastreio-tipo-busca"></select>
+            </div>
+          </div>
+          <div class="grid cols-2">
+            <div class="field">
+              <label>Número</label>
+              <input type="text" id="rastreio-numero" placeholder="Ex.: 1178557">
+            </div>
+            <div class="field" id="rastreio-campo-serie">
+              <label>Série <span style="font-weight:400; color:var(--muted);">(opcional)</span></label>
+              <input type="text" id="rastreio-serie" placeholder="Ex.: 1">
+            </div>
+          </div>
+          <div class="cta-row">
+            <button type="button" class="primary" id="btn-rastrear">Rastrear</button>
+            <span class="status-line" id="rastreio-status-line"></span>
+          </div>
+        </div>
+
+        <div class="panel fade-in" id="rastreio-resultados" style="margin-top: 20px; display:none;">
+          <h2><span class="num-badge">✓</span> Resultado</h2>
+          <div id="rastreio-lista"></div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- ===== Tela: Cadastro de caixas ===== -->
     <div id="view-caixas" class="app-view" hidden>
       <div class="wrap">
@@ -836,6 +920,114 @@
       document.getElementById(`view-${btn.dataset.view}`).hidden = false;
       if (btn.dataset.view === 'historico') carregarHistorico();
     });
+  });
+
+  // ================= Rastreio (consulta ao vivo, sem histórico próprio) =================
+  const rastreioTransportadora = document.getElementById('rastreio-transportadora');
+  const rastreioTipoBusca = document.getElementById('rastreio-tipo-busca');
+  const rastreioCampoSerie = document.getElementById('rastreio-campo-serie');
+
+  function atualizarOpcoesRastreio() {
+    if (rastreioTransportadora.value === 'braspress') {
+      rastreioTipoBusca.innerHTML = `
+        <option value="notaFiscal">Número da nota fiscal</option>
+        <option value="pedido">Número do pedido</option>
+      `;
+      rastreioCampoSerie.style.display = 'none';
+    } else {
+      rastreioTipoBusca.innerHTML = `
+        <option value="conhecimento">Número do CT-e (conhecimento)</option>
+        <option value="notaFiscal">Número da nota fiscal</option>
+      `;
+      rastreioCampoSerie.style.display = '';
+    }
+  }
+  rastreioTransportadora.addEventListener('change', atualizarOpcoesRastreio);
+  atualizarOpcoesRastreio();
+
+  document.getElementById('btn-rastrear').addEventListener('click', async () => {
+    const transportadora = rastreioTransportadora.value;
+    const tipoBusca = rastreioTipoBusca.value;
+    const numero = document.getElementById('rastreio-numero').value.trim();
+    const serie = document.getElementById('rastreio-serie').value.trim();
+    const statusLine = document.getElementById('rastreio-status-line');
+    const painelResultados = document.getElementById('rastreio-resultados');
+    const lista = document.getElementById('rastreio-lista');
+    const btn = document.getElementById('btn-rastrear');
+
+    statusLine.style.color = '';
+    painelResultados.style.display = 'none';
+    lista.innerHTML = '';
+
+    if (!numero) {
+      statusLine.textContent = 'Digite um número para buscar.';
+      statusLine.style.color = '#c0392b';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Consultando…';
+    statusLine.textContent = '';
+
+    try {
+      const endpoint = transportadora === 'jamef' ? '/api/jamef-rastrear' : '/api/braspress-rastrear';
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify({ tipoBusca, numero, serie }),
+      });
+      const dados = await resp.json();
+
+      if (dados.erro) {
+        statusLine.textContent = dados.mensagem || 'Não foi possível consultar.';
+        statusLine.style.color = '#c0392b';
+        return;
+      }
+
+      const registros = Array.isArray(dados.registros) ? dados.registros : [];
+      if (!registros.length) {
+        statusLine.textContent = 'Nenhum registro encontrado para esse número.';
+        return;
+      }
+
+      statusLine.textContent = `${registros.length} registro(s) encontrado(s).`;
+
+      lista.innerHTML = registros.map((r) => `
+        <div class="panel" style="margin-bottom: 14px;">
+          <div class="grid cols-3">
+            <div class="field"><label>Conhecimento</label><div class="static-value">${escapeHtml(r.conhecimento || '—')}</div></div>
+            <div class="field"><label>Nota fiscal</label><div class="static-value">${escapeHtml(r.notaFiscal || '—')}</div></div>
+            <div class="field"><label>Status atual</label><div class="static-value">${escapeHtml(r.statusAtual || '—')}</div></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="field"><label>Remetente</label><div class="static-value">${escapeHtml(r.remetente || '—')}</div></div>
+            <div class="field"><label>Destinatário</label><div class="static-value">${escapeHtml(r.destinatario || '—')}</div></div>
+            <div class="field"><label>Previsão de entrega</label><div class="static-value">${escapeHtml(r.previsaoEntrega || '—')}</div></div>
+          </div>
+          ${r.comprovanteUrl ? `<p class="arch-note"><a href="${escapeHtml(r.comprovanteUrl)}" target="_blank" rel="noopener noreferrer">Ver comprovante de entrega ↗</a></p>` : ''}
+          ${(r.eventos || []).length ? `
+            <label style="margin-top:10px; display:block;">Linha do tempo</label>
+            <div class="timeline-table">
+              <div class="timeline-head"><span>Data</span><span>Status</span><span>Local</span></div>
+              ${r.eventos.map((e) => `
+                <div class="timeline-row">
+                  <span>${escapeHtml(e.data || '—')}</span>
+                  <span>${escapeHtml(e.status || '—')}</span>
+                  <span>${escapeHtml(e.local || '—')}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<p class="arch-note" style="margin:0;">Sem eventos de linha do tempo disponíveis para este registro.</p>'}
+        </div>
+      `).join('');
+      painelResultados.style.display = '';
+    } catch (err) {
+      statusLine.textContent = 'Falha de conexão ao consultar o rastreio.';
+      statusLine.style.color = '#c0392b';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Rastrear';
+    }
   });
 
   // ================= Histórico de cotações (log de apoio) =================
