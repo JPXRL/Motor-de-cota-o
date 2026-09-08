@@ -60,10 +60,19 @@ async function getToken(dominio) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
   });
-  const json = await resp.json().catch(() => null);
+  const textoResposta = await resp.text();
+  let json = null;
+  try { json = JSON.parse(textoResposta); } catch { /* resposta não era JSON */ }
   const token = json?.access_token || json?.accessToken;
   if (!resp.ok || !token) {
-    throw new Error(`Falha no login da Rodonaves em ${dominio} (HTTP ${resp.status})`);
+    // Loga o corpo da resposta de erro da Rodonaves (não contém a senha —
+    // essa vai só na nossa requisição, nunca na resposta deles) para dar
+    // pra descobrir a causa real (usuário/senha errados, companyId errado,
+    // conta não liberada pra esse domínio específico, etc.) em vez de só
+    // "HTTP 400". Ver nos Logs do projeto no Vercel (aba Logs/Functions).
+    console.error(`[rodonaves-cotar] falha no login em ${dominio}:`, JSON.stringify({ status: resp.status, resposta: textoResposta.slice(0, 1000) }));
+    const motivo = json?.error_description || json?.error || json?.message || textoResposta.slice(0, 200);
+    throw new Error(`Falha no login da Rodonaves em ${dominio} (HTTP ${resp.status})${motivo ? `: ${motivo}` : ''}`);
   }
 
   // A doc de autenticação não documenta a validade do token para este fluxo
