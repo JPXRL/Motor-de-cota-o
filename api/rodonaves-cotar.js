@@ -232,7 +232,12 @@ module.exports = async (req, res) => {
     const textoCotacao = await respCotacao.text();
     let jsonCotacao = null;
     try { jsonCotacao = JSON.parse(textoCotacao); } catch { /* resposta não era JSON */ }
-    if (!respCotacao.ok || !jsonCotacao?.ProtocolId) {
+    // A primeira cotação real (08/09/2026) mostrou que a resposta de verdade
+    // da Rodonaves usa nomes de campo diferentes do que a especificação da
+    // documentação sugeria: é "ProtocolNumber" (não "ProtocolId") e "Value"
+    // (não "FreightValue"). Ajustado aqui com base na resposta real, não mais
+    // um palpite.
+    if (!respCotacao.ok || !jsonCotacao?.ProtocolNumber) {
       // Mostra um pedaço da resposta bruta da Rodonaves na própria mensagem de
       // erro (não só no log do Vercel) — assim dá pra ver o motivo direto na
       // tela, sem precisar abrir o painel do Vercel. Response da Rodonaves,
@@ -241,29 +246,28 @@ module.exports = async (req, res) => {
       const motivo = jsonCotacao?.message || jsonCotacao?.mensagem || jsonCotacao?.errors?.[0]?.message || textoCotacao.slice(0, 300);
       res.status(200).json({
         erro: true,
-        mensagem: `Rodonaves retornou HTTP ${respCotacao.status} na cotação${motivo ? `: ${motivo}` : ' (resposta sem ProtocolId)'}`,
+        mensagem: `Rodonaves retornou HTTP ${respCotacao.status} na cotação${motivo ? `: ${motivo}` : ' (resposta sem ProtocolNumber)'}`,
       });
       return;
     }
 
-    // Log da primeira resposta real — nunca testado antes, ajuda a confirmar
-    // rápido se o formato bate com o documentado em especificacao-api-rodonaves.md.
-    console.error('[rodonaves-cotar] resposta bruta da cotação (confirmar formato):', JSON.stringify(jsonCotacao).slice(0, 4000));
-
-    // 3. Prazo de entrega — endpoint separado; se falhar, a cotação ainda
-    //    aparece na tela, só sem prazo (não trava o resto do comparativo).
-    let prazoDias = '—';
-    try {
-      prazoDias = await calcularPrazo(origem, destino);
-    } catch (errPrazo) {
-      console.error('[rodonaves-cotar] falha ao buscar prazo de entrega:', errPrazo.message);
+    // 3. Prazo de entrega: a própria cotação já devolve "DeliveryTime" (visto
+    //    na primeira chamada real) — só cai pro endpoint separado de prazo se
+    //    por acaso vier vazio nessa resposta específica.
+    let prazoDias = jsonCotacao.DeliveryTime;
+    if (prazoDias === null || prazoDias === undefined) {
+      try {
+        prazoDias = await calcularPrazo(origem, destino);
+      } catch (errPrazo) {
+        console.error('[rodonaves-cotar] falha ao buscar prazo de entrega:', errPrazo.message);
+        prazoDias = '—';
+      }
     }
 
     res.status(200).json({
-      valor: parseFloat(jsonCotacao.FreightValue),
+      valor: parseFloat(jsonCotacao.Value),
       prazoDias,
-      protocolo: jsonCotacao.ProtocolId,
-      numeroCte: jsonCotacao.Freight || null,
+      protocolo: jsonCotacao.ProtocolNumber,
     });
   } catch (err) {
     res.status(200).json({ erro: true, mensagem: err.message || 'Erro ao consultar a Rodonaves' });
