@@ -53,7 +53,13 @@ async function getToken(dominio) {
   params.set('username', process.env.RODONAVES_USERNAME || '');
   params.set('password', process.env.RODONAVES_PASSWORD || '');
   params.set('companyId', '1');
-  params.set('auth_type', 'dev');
+  // A Rodonaves documenta esse valor como "dev" minúsculo no texto da doc de
+  // autenticação, mas o formulário "Try It!" da própria doc interativa (que o
+  // Juan testou manualmente em várias APIs — Correios, Coleta, Cliente, etc.
+  // — e todas deram 200) usa "DEV" maiúsculo como valor padrão. Foi esse teste
+  // manual que apontou a causa provável do HTTP 400 que a gente via aqui: a
+  // API parece ser sensível a maiúscula/minúscula nesse campo.
+  params.set('auth_type', 'DEV');
 
   const resp = await fetch(`${dominio}/token`, {
     method: 'POST',
