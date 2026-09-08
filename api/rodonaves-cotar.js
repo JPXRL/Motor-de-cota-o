@@ -229,12 +229,19 @@ module.exports = async (req, res) => {
       }),
     });
 
-    const jsonCotacao = await respCotacao.json().catch(() => null);
+    const textoCotacao = await respCotacao.text();
+    let jsonCotacao = null;
+    try { jsonCotacao = JSON.parse(textoCotacao); } catch { /* resposta não era JSON */ }
     if (!respCotacao.ok || !jsonCotacao?.ProtocolId) {
-      console.error('[rodonaves-cotar] resposta de erro da Rodonaves:', JSON.stringify({ status: respCotacao.status, resposta: jsonCotacao }));
+      // Mostra um pedaço da resposta bruta da Rodonaves na própria mensagem de
+      // erro (não só no log do Vercel) — assim dá pra ver o motivo direto na
+      // tela, sem precisar abrir o painel do Vercel. Response da Rodonaves,
+      // não tem credencial nenhuma aqui.
+      console.error('[rodonaves-cotar] resposta de erro da Rodonaves:', JSON.stringify({ status: respCotacao.status, resposta: textoCotacao.slice(0, 1000) }));
+      const motivo = jsonCotacao?.message || jsonCotacao?.mensagem || jsonCotacao?.errors?.[0]?.message || textoCotacao.slice(0, 300);
       res.status(200).json({
         erro: true,
-        mensagem: jsonCotacao?.message || jsonCotacao?.mensagem || `Rodonaves retornou HTTP ${respCotacao.status} na cotação`,
+        mensagem: `Rodonaves retornou HTTP ${respCotacao.status} na cotação${motivo ? `: ${motivo}` : ' (resposta sem ProtocolId)'}`,
       });
       return;
     }
