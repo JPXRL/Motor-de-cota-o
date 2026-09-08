@@ -609,8 +609,8 @@
         <p class="subtitle">Digite os dados do envio uma vez e compare as transportadoras ao mesmo tempo</p>
 
         <div class="notice">
-          <strong>✅ Cotação real — Jamef e Braspress consultadas ao vivo.</strong>
-          As duas chamadas abaixo já vão para as APIs de verdade por trás de um backend seguro (as senhas ficam só no servidor, nunca no navegador). Jamef e Braspress já rodam em <strong>produção</strong> (dados reais). A <strong>Rodonaves ainda não está incluída</strong> — sem resposta da transportadora sobre o acesso à API; assim que chegar, é só adicionar mais um item na lista de transportadoras, igual às outras duas. A busca de cliente pelo Sankhya abaixo continua simulada por enquanto.
+          <strong>✅ Cotação real — Jamef, Braspress e Rodonaves consultadas ao vivo.</strong>
+          As chamadas abaixo já vão para as APIs de verdade por trás de um backend seguro (as senhas ficam só no servidor, nunca no navegador). Jamef e Braspress rodam em <strong>produção</strong> (dados reais) desde 01-02/09/2026. A <strong>Rodonaves foi adicionada em 08/09/2026</strong>, mas ainda não teve nenhuma cotação real confirmada — a primeira busca de verdade serve também de teste da integração (ver `especificacao-api-rodonaves.md` no projeto Claude para os detalhes e pontos em aberto). A busca de cliente pelo Sankhya abaixo continua simulada por enquanto.
         </div>
 
         <div class="panel">
@@ -1402,14 +1402,14 @@
       nome: 'Jamef', sigla: 'JM', modais: ['rodoviario'],
       cotar: (dados, modal) => cotarViaBackend('/api/jamef-cotar', dados, modal),
     },
-    // Rodonaves ainda não incluída — sem resposta da transportadora sobre o
-    // acesso à API. Assim que tivermos credenciais, é só adicionar mais um
-    // bloco igual aos acima (endpoint /api/rodonaves-cotar) — nenhuma outra
-    // parte do arquivo precisa mudar:
-    // {
-    //   nome: 'Rodonaves', sigla: 'RN', modais: ['rodoviario'],
-    //   cotar: (dados, modal) => cotarViaBackend('/api/rodonaves-cotar', dados, modal),
-    // },
+    {
+      // Adicionada em 08/09/2026 — mesmo desenho de "adaptador por
+      // transportadora" das outras duas, nada mais no formulário ou na tela
+      // de resultado precisou mudar. Só rodoviário por enquanto (a
+      // especificação da Rodonaves não confirma suporte a aéreo).
+      nome: 'Rodonaves', sigla: 'RN', modais: ['rodoviario'],
+      cotar: (dados, modal) => cotarViaBackend('/api/rodonaves-cotar', dados, modal),
+    },
   ];
 
   const form = document.getElementById('form-cotacao');

@@ -1,6 +1,6 @@
 # Motor de Cotação de Frete — RARE WAY
 
-Ferramenta interina de cotação de frete: consulta Jamef e Braspress em paralelo, compara preço e prazo, e ajuda a decidir qual transportadora usar em cada envio.
+Ferramenta interina de cotação de frete: consulta Jamef, Braspress e Rodonaves em paralelo, compara preço e prazo, e ajuda a decidir qual transportadora usar em cada envio.
 
 - **Site em produção:** https://motor-cotacao-frete.vercel.app
 - **Deploy:** automático — todo push na branch `main` publica direto em produção (via integração Vercel + GitHub).
@@ -11,7 +11,7 @@ Ferramenta interina de cotação de frete: consulta Jamef e Braspress em paralel
 - `login.html` — tela de login customizada com a identidade visual da RARE WAY (fundo com padrão de pontos + logo), usada no lugar do popup nativo de Basic Auth do navegador. Página estática autocontida (CSS e imagens embutidos), sem dependências externas.
 - `middleware.js` — controle de acesso: exige a senha única compartilhada (`MOTOR_SENHA`, ver abaixo) para abrir qualquer página ou chamar qualquer função deste site. Antes usava o popup nativo de Basic Auth do navegador; agora redireciona para `login.html` e verifica um cookie de sessão assinado (HMAC-SHA256), sem exigir novo login a cada visita dentro da validade da sessão (12h). Continua sendo senha única compartilhada — sem conta por pessoa. (A tentativa anterior de login individual por pessoa foi removida em 01/09/2026 por não funcionar de forma confiável.)
 - `api/` — funções serverless (Vercel Functions) que guardam as credenciais das transportadoras e falam com as APIs reais:
-  - `jamef-cotar.js`, `braspress-cotar.js` — cotação de frete.
+  - `jamef-cotar.js`, `braspress-cotar.js`, `rodonaves-cotar.js` — cotação de frete. A Rodonaves é a mais complexa das três: usa três domínios/APIs diferentes (busca de cidade, cotação e prazo de entrega, cada um com seu próprio login) em vez de um domínio só — ver comentário no topo do arquivo e `especificacao-api-rodonaves.md` no projeto Claude. Ainda sem nenhuma cotação real confirmada (Jamef e Braspress já têm).
   - `jamef-rastrear.js`, `braspress-rastrear.js` — rastreio de encomendas (consulta ao vivo, sem guardar nada), usadas pela tela "Rastreio" do site.
   - `consulta-cnpj.js` — busca de dados de empresa pela CNPJá (Receita Federal).
   - `caixas.js` — CRUD do cadastro de caixas padrão (banco Postgres, quando conectado).
@@ -26,6 +26,7 @@ Nunca cadastradas em código nem em chat — só direto no painel do Vercel:
 
 - `JAMEF_USERNAME`, `JAMEF_PASSWORD`, `JAMEF_AMBIENTE`, `JAMEF_CNPJ_REMETENTE`, `JAMEF_CEP_ORIGEM` — usadas tanto na cotação (`jamef-cotar.js`) quanto no rastreio (`jamef-rastrear.js`).
 - `BRASPRESS_USERNAME`, `BRASPRESS_PASSWORD`, `BRASPRESS_CNPJ_REMETENTE`, `BRASPRESS_CEP_ORIGEM` — usadas tanto na cotação (`braspress-cotar.js`) quanto no rastreio (`braspress-rastrear.js`).
+- `RODONAVES_USERNAME`, `RODONAVES_PASSWORD`, `RODONAVES_CNPJ_REMETENTE`, `RODONAVES_CEP_ORIGEM`, `RODONAVES_CONTATO_NOME`, `RODONAVES_CONTATO_TELEFONE` — usadas na cotação (`rodonaves-cotar.js`). As duas últimas (`CONTATO_NOME`/`CONTATO_TELEFONE`) existem porque a Rodonaves exige um contato na cotação, diferente da Jamef/Braspress.
 - `POSTGRES_URL` (e variáveis irmãs) — cadastradas automaticamente pelo Vercel ao conectar o banco Postgres (Neon) na aba Storage.
 - `MOTOR_SENHA` — a senha única que a equipe usa para entrar no site, digitada em `login.html`. Também é usada como chave para assinar o cookie de sessão (não existe variável de sessão separada). Enquanto esta variável não existir, o site fica aberto sem pedir senha, igual está hoje.
 
