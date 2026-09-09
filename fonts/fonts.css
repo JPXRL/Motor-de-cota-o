@@ -1,0 +1,64 @@
+/* Helvetica Now — fontes da marca RARE WAY, licenciadas pela empresa.
+   Carregadas aqui via @font-face; em navegadores que por algum motivo não
+   baixem o arquivo, o font-family de cada página tem fallback pro
+   Helvetica Neue / Helvetica / Arial do sistema, que é visualmente muito
+   próximo. */
+
+@font-face {
+  font-family: "Helvetica Now Text";
+  src: url("/fonts/HelveticaNowText-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Now Text";
+  src: url("/fonts/HelveticaNowText-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Now Text";
+  src: url("/fonts/HelveticaNowText-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Helvetica Now Display";
+  src: url("/fonts/HelveticaNowDisplay-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Now Display";
+  src: url("/fonts/HelveticaNowDisplay-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Now Display";
+  src: url("/fonts/HelveticaNowDisplay-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Helvetica Now Micro";
+  src: url("/fonts/HelveticaNowMicro-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Now Micro";
+  src: url("/fonts/HelveticaNowMicro-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}

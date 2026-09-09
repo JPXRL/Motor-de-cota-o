@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cotação de Frete — RARE WAY</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   :root {
     /* Cores institucionais RARE WAY (do manual de identidade visual) */
@@ -57,9 +58,10 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    /* Helvetica Now é a fonte da marca (fontes licenciadas via @font-face
-       entram aqui quando disponíveis); no navegador cai pro Helvetica/Arial
-       do sistema, que é visualmente muito próximo. */
+    /* Helvetica Now é a fonte da marca (arquivos licenciados, carregados
+       via @font-face em /fonts/fonts.css, linkado no <head>); se por algum
+       motivo o navegador não baixar a fonte, cai pro Helvetica/Arial do
+       sistema, que é visualmente muito próximo. */
     font-family: "Helvetica Now Text", "Helvetica Now", "Helvetica Neue", Helvetica, Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
