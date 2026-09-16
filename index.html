@@ -7,52 +7,86 @@
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   :root {
-    /* Cores institucionais RARE WAY (do manual de identidade visual) */
-    --rw-pink: #FD9FB1;
-    --rw-teal: #57D5D1;
-    --rw-purple: #C0ADDB;
+    /* ================== Identidade do motor de frete ==================
+       Lilás + dourado — as cores da tela de entrada, agora valendo para o
+       sistema inteiro (16/09/2026, decisão do Juan). Os nomes --rw-* ficaram
+       como apelidos para nenhuma regra antiga quebrar: o que mudou foi o
+       valor, não o nome.
 
-    /* Tons derivados por color-mix() a partir das 3 cores da marca — usados
-       pra garantir contraste em botões/texto sem precisar "chutar" um hex
-       exato da rampa do manual. Se depois vocês quiserem os tons exatos da
-       rampa impressa, é só trocar estas variáveis pelos hex reais. */
-    --rw-pink-deep: color-mix(in srgb, var(--rw-pink) 55%, black);
-    --rw-teal-deep: color-mix(in srgb, var(--rw-teal) 50%, black);
-    --rw-purple-deep: color-mix(in srgb, var(--rw-purple) 55%, black);
+       Regra de uso da cor: lilás é a marca e a ação (botões, foco, links);
+       dourado é DESTAQUE (a melhor cotação, o que merece o olho); laranja é
+       aviso; vermelho é erro. Cor nunca decora — cada uma significa uma
+       coisa só. */
+    --lilas:         #8E3FC9;
+    --lilas-forte:   #7A2FB5;
+    --lilas-claro:   #A45FD8;
+    --lilas-suave:   #C9A6E8;
+    --dourado:       #F5C63D;
+    --dourado-texto: #8A6A05;
+
+    /* Apelidos de compatibilidade com as regras escritas antes */
+    --rw-pink:        var(--lilas-claro);
+    --rw-pink-deep:   var(--lilas);
+    --rw-purple:      var(--lilas-suave);
+    --rw-purple-deep: var(--lilas-forte);
+    --rw-teal:        var(--dourado);
+    --rw-teal-deep:   var(--dourado-texto);
+
+    /* Escala de tipografia — oito degraus, em vez dos dez tamanhos soltos
+       que existiam antes (11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 24). */
+    --t-micro: 11px;
+    --t-mini:  12px;
+    --t-sm:    13px;
+    --t-base:  15px;
+    --t-md:    18px;
+    --t-lg:    22px;
+    --t-xl:    28px;
+
+    /* Escala de espaçamento e raios */
+    --s-1: 4px;  --s-2: 8px;  --s-3: 12px;
+    --s-4: 16px; --s-6: 24px; --s-8: 32px; --s-12: 48px;
+    --r-sm: 6px; --r-md: 10px; --r-lg: 16px;
 
     --bg: #ffffff;
-    --bg-soft: color-mix(in srgb, var(--rw-purple) 8%, white);
+    --bg-soft: color-mix(in srgb, var(--lilas) 5%, white);
     --panel: #ffffff;
-    --border: color-mix(in srgb, var(--rw-purple) 22%, white);
-    --text: #14141a;
-    --muted: #67626f;
-    --accent: var(--rw-pink-deep);
+    --border: color-mix(in srgb, var(--lilas) 16%, white);
+    --text: #16121c;
+    --muted: #6b6478;
+    --accent: var(--lilas);
     --accent-contrast: #ffffff;
-    --accent-bg: color-mix(in srgb, var(--rw-pink) 22%, white);
-    --best-bg: color-mix(in srgb, var(--rw-teal) 20%, white);
-    --warn-bg: color-mix(in srgb, var(--rw-pink) 16%, white);
-    --warn-border: color-mix(in srgb, var(--rw-pink) 55%, white);
-    --shadow: 0 1px 3px rgba(20,20,26,0.06), 0 1px 2px rgba(20,20,26,0.04);
-    --logo-bg: #14141a;
+    --accent-bg: color-mix(in srgb, var(--lilas) 10%, white);
+    --best-bg: color-mix(in srgb, var(--dourado) 20%, white);
+    --best-border: color-mix(in srgb, var(--dourado) 62%, white);
+    --warn-bg: #FFF4E0;
+    --warn-border: #E9A93B;
+    --erro: #C0392B;
+    --shadow: 0 1px 2px rgba(22,18,28,0.05), 0 4px 12px rgba(22,18,28,0.05);
+    --logo-bg: var(--lilas);
     --logo-text: #ffffff;
   }
 
   html[data-theme="dark"] {
-    --bg: #0b0b0d;
-    --bg-soft: #141417;
-    --panel: #17171b;
-    --border: #2a2a30;
-    --text: #f4f3f6;
-    --muted: #a49fae;
-    --accent: var(--rw-pink);
-    --accent-contrast: #14141a;
-    --accent-bg: color-mix(in srgb, var(--rw-pink) 22%, #17171b);
-    --best-bg: color-mix(in srgb, var(--rw-teal) 22%, #17171b);
-    --warn-bg: color-mix(in srgb, var(--rw-pink) 16%, #17171b);
-    --warn-border: color-mix(in srgb, var(--rw-pink) 45%, #17171b);
-    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
-    --logo-bg: #ffffff;
-    --logo-text: #14141a;
+    --bg: #0e0b13;
+    --bg-soft: #17121f;
+    --panel: #1a1523;
+    --border: #2e2640;
+    --text: #f3f0f8;
+    --muted: #a79fb8;
+    --accent: var(--lilas-claro);
+    --accent-contrast: #16121c;
+    --accent-bg: color-mix(in srgb, var(--lilas) 26%, #1a1523);
+    --best-bg: color-mix(in srgb, var(--dourado) 16%, #1a1523);
+    --best-border: color-mix(in srgb, var(--dourado) 45%, #1a1523);
+    --warn-bg: color-mix(in srgb, #E9A93B 14%, #1a1523);
+    --warn-border: color-mix(in srgb, #E9A93B 42%, #1a1523);
+    --erro: #F07567;
+    /* No escuro o dourado escuro some no fundo — o texto dourado passa a ser
+       o dourado cheio, que aí tem contraste de sobra. */
+    --rw-teal-deep: var(--dourado);
+    --shadow: 0 1px 3px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.35);
+    --logo-bg: var(--lilas-claro);
+    --logo-text: #16121c;
   }
 
   * { box-sizing: border-box; }
@@ -558,6 +592,118 @@
   @media (max-width: 640px) {
     .caixa-row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
   }
+
+  /* ===================================================================
+     v2 — layout de trabalho em duas colunas (16/09/2026)
+
+     O problema da v1: o formulário empurrava o resultado para baixo da
+     dobra. Quem cota compara valor com dado de entrada o tempo todo, e
+     estava rolando a tela para cima e para baixo a cada conferência.
+
+     Na v2 o formulário fica à esquerda e as propostas ficam numa faixa
+     fixa à direita, sempre visível. Abaixo de 1100px volta a ser uma
+     coluna só — em tela estreita, duas colunas espremem as duas.
+     =================================================================== */
+  .wrap.wide { max-width: 1240px; }
+
+  .cotacao-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: var(--s-6);
+    align-items: start;
+  }
+  .cotacao-rail { position: sticky; top: var(--s-6); }
+  .cotacao-rail .panel { margin-bottom: var(--s-4); }
+
+  @media (max-width: 1100px) {
+    .cotacao-layout { grid-template-columns: 1fr; }
+    .cotacao-rail { position: static; }
+  }
+
+  /* Estado vazio da faixa de resultados — some sozinho quando as propostas
+     chegam (ver o observer no final do arquivo). */
+  .rail-empty {
+    border: 1px dashed var(--border);
+    border-radius: var(--r-md);
+    padding: var(--s-8) var(--s-6);
+    text-align: center;
+    color: var(--muted);
+    background: var(--bg-soft);
+  }
+  .rail-empty .rail-empty-icon {
+    width: 34px; height: 34px;
+    margin: 0 auto var(--s-3);
+    color: var(--lilas-suave);
+  }
+  .rail-empty strong {
+    display: block;
+    color: var(--text);
+    font-size: var(--t-sm);
+    margin-bottom: var(--s-1);
+  }
+  .rail-empty span { font-size: var(--t-mini); line-height: 1.5; display: block; }
+  .cotacao-rail.tem-resultado .rail-empty { display: none; }
+
+  /* ===== Tipografia na escala ===== */
+  h1 { font-size: var(--t-xl); letter-spacing: -0.6px; line-height: 1.15; }
+  .subtitle { font-size: var(--t-base); line-height: 1.5; margin-bottom: var(--s-6); }
+  .panel h2 { font-size: var(--t-base); letter-spacing: -0.1px; }
+  .eyebrow { color: var(--lilas); }
+  html[data-theme="dark"] .eyebrow { color: var(--lilas-claro); }
+  label { font-size: var(--t-mini); }
+  input, select, .static-value { font-size: var(--t-sm); border-radius: var(--r-sm); }
+  .panel { border-radius: var(--r-lg); padding: var(--s-6); }
+  .cotacao-rail .panel { padding: var(--s-4); }
+
+  /* ===== A melhor proposta ganha o dourado ===== */
+  .carrier-row.best {
+    background: var(--best-bg);
+    border-left: 3px solid var(--dourado);
+  }
+  .carrier-row.best .price { color: var(--dourado-texto); }
+  html[data-theme="dark"] .carrier-row.best .price { color: var(--dourado); }
+
+  /* Na faixa estreita o comparativo empilha em vez de virar cinco colunas
+     apertadas. */
+  @media (min-width: 1101px) {
+    .cotacao-rail .results-head { display: none; }
+    .cotacao-rail .carrier-row {
+      grid-template-columns: 34px 1fr auto;
+      grid-template-areas:
+        "logo nome preco"
+        "logo prazo status";
+      row-gap: 2px;
+      padding: var(--s-3);
+    }
+    .cotacao-rail .carrier-row .logo-dot { grid-area: logo; }
+    .cotacao-rail .carrier-row > .carrier-name,
+    .cotacao-rail .carrier-row > div:nth-child(2) { grid-area: nome; }
+    .cotacao-rail .price { grid-area: preco; }
+    .cotacao-rail .prazo { grid-area: prazo; text-align: left; }
+    .cotacao-rail .status-dot-row { grid-area: status; }
+  }
+
+  button.primary { border-radius: var(--r-sm); font-size: var(--t-base); }
+  button.primary:hover:not(:disabled) { background: var(--lilas-forte); color: #fff; }
+  button.secondary { border-radius: var(--r-sm); }
+
+  /* Barra de ação fixa no rodapé da coluna do formulário: o botão de cotar
+     fica sempre alcançável, sem rolar até o fim. */
+  .cta-row {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: var(--s-3) 0;
+    margin-top: var(--s-4);
+    z-index: 5;
+  }
+  .cotacao-col-form { padding-bottom: var(--s-2); }
+
+  /* Correção antiga: `.notice strong` deixava TODO negrito do aviso em bloco,
+     quebrando o parágrafo em linhas soltas. Só o primeiro é título. */
+  .notice strong { display: inline; }
+  .notice > strong:first-child { display: block; margin-bottom: var(--s-1); }
 </style>
 </head>
 <body>
@@ -610,7 +756,7 @@
   <main class="app-main">
     <!-- ===== Tela: Cotação (a ferramenta original) ===== -->
     <div id="view-cotacao" class="app-view">
-      <div class="wrap">
+      <div class="wrap wide">
 
         <p class="eyebrow">Rare Way Cosméticos</p>
         <h1>Cotação de frete — protótipo</h1>
@@ -620,6 +766,10 @@
           <strong>✅ Cotação real — Jamef, Braspress e Rodonaves consultadas ao vivo.</strong>
           As chamadas abaixo já vão para as APIs de verdade por trás de um backend seguro (as senhas ficam só no servidor, nunca no navegador). Jamef e Braspress rodam em <strong>produção</strong> (dados reais) desde 01-02/09/2026, e a <strong>Rodonaves</strong> desde 08/09/2026 (ver `especificacao-api-rodonaves.md` no projeto Claude para os detalhes e pontos em aberto). A busca de cliente pelo Sankhya abaixo continua simulada por enquanto.
         </div>
+
+        <!-- v2: duas colunas — formulário à esquerda, propostas fixas à direita -->
+        <div class="cotacao-layout">
+        <div class="cotacao-col-form">
 
         <div class="panel">
           <h2>Remetente <span class="tag-sankhya" style="margin-left:8px;">fixo — mesma origem em todas as cotações</span></h2>
@@ -761,16 +911,38 @@
           </div>
         </form>
 
-        <div class="panel fade-in" id="resultados" style="margin-top: 20px;">
+        </div><!-- /cotacao-col-form -->
+
+        <aside class="cotacao-rail" id="cotacao-rail">
+
+          <div class="rail-empty">
+            <svg class="rail-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle></svg>
+            <strong>As propostas aparecem aqui</strong>
+            <span>Preencha os dados ao lado e clique em <b>Cotar transportadoras</b>. Esta faixa fica fixa enquanto você rola o formulário, então dá para conferir o valor sem perder o dado de entrada de vista.</span>
+          </div>
+
+        <div class="panel fade-in" id="resultados" style="margin-top: 0;">
           <h2><span class="num-badge">✓</span> Comparativo de cotações</h2>
           <div class="results-table">
             <div class="results-head"><span>Transportadora</span><span>Prazo</span><span>Valor</span><span>Status</span></div>
             <div id="lista-resultados"></div>
           </div>
           <p class="arch-note">
-            Como funciona por trás: ao clicar em "Cotar", o formulário dispara <strong>uma chamada em paralelo por transportadora (e por modal escolhido)</strong> — não uma atrás da outra. Cada uma responde no seu próprio tempo (normalmente 1 a 3 segundos), e assim que todas voltam, a tela monta a tabela ordenada da mais barata pra mais cara. O tempo total de espera é o da mais lenta, não a soma de todas. A lista de transportadoras abaixo é um array de configuração — adicionar a #4, #5... #23 é só acrescentar um item nele; o formulário e esta tela não mudam.
+            Consultadas em paralelo — o tempo de espera é o da transportadora mais lenta, não a soma de todas.
           </p>
+          <!-- Explicação longa que ficava aqui na v1 (movida para comentário em
+               16/09/2026 porque a faixa é estreita e o texto é para quem mexe no
+               código, não para quem cota): ao clicar em "Cotar", o formulário
+               dispara uma chamada em paralelo por transportadora e por modal
+               escolhido, não uma atrás da outra. Cada uma responde no seu tempo
+               (1 a 3 segundos) e a tela monta a tabela ordenada da mais barata
+               para a mais cara. A lista de transportadoras é um array de
+               configuração — incluir a #4, #5... #23 é acrescentar um item nele,
+               sem mexer no formulário nem nesta tela. -->
         </div>
+
+        </aside><!-- /cotacao-rail -->
+        </div><!-- /cotacao-layout -->
 
       </div>
     </div>
@@ -1651,6 +1823,29 @@
     btnCotar.textContent = textoOriginalBotao;
     btnCotar.disabled = false;
   });
+
+  // ================= Faixa de resultados (v2) =================
+  // O painel #resultados é mostrado/escondido pelo código de cotação mexendo
+  // direto no style. Em vez de espalhar essa responsabilidade, a faixa observa
+  // o painel e liga a classe .tem-resultado — que é o que faz o estado vazio
+  // ("as propostas aparecem aqui") sumir. Assim, se amanhã o painel passar a
+  // ser mostrado de outro jeito, isto continua funcionando.
+  (function observarResultados() {
+    const rail = document.getElementById('cotacao-rail');
+    const painel = document.getElementById('resultados');
+    if (!rail || !painel) return;
+
+    const sincronizar = () => {
+      const visivel = window.getComputedStyle(painel).display !== 'none';
+      rail.classList.toggle('tem-resultado', visivel);
+    };
+
+    new MutationObserver(sincronizar).observe(painel, {
+      attributes: true,
+      attributeFilter: ['style', 'class', 'hidden'],
+    });
+    sincronizar();
+  })();
 
   // ================= Ponto de entrada =================
   // Sem tela de entrada nem login: o motor já é a única coisa que existe na
