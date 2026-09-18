@@ -763,6 +763,74 @@
   .theme-btn:hover { background: var(--accent-bg); color: var(--text); }
   .theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #tema-nome { font-weight: 700; color: var(--text); }
+
+  /* ===================================================================
+     Escolha da transportadora e o motivo (18/09/2026)
+
+     O comparativo mostrava o preço e acabava ali. Quem escolhia, escolhia
+     fora do sistema — e o "porquê" morria na cabeça de quem clicou.
+
+     Agora a linha inteira é clicável. Se a escolhida for a mais barata, o
+     motivo se preenche sozinho e é só confirmar. Se for outra, o sistema
+     pergunta por quê e mostra quanto custa a mais. É o único momento em que
+     vale interromper o operador: escolher a mais cara sem registrar o motivo
+     é exatamente o dado que hoje não existe em lugar nenhum.
+     =================================================================== */
+  .carrier-row.clicavel { cursor: pointer; transition: background 0.15s ease; }
+  .carrier-row.clicavel:hover { background: var(--accent-bg); }
+  .carrier-row.clicavel:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .carrier-row.selecionada { background: var(--accent-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .carrier-row.escolhida { box-shadow: inset 3px 0 0 var(--accent); }
+  .carrier-row.descartada { opacity: 0.45; }
+
+  .escolha-hint {
+    font-size: var(--t-mini);
+    color: var(--muted);
+    padding: var(--s-2) var(--s-3) 0;
+  }
+
+  .escolha-box {
+    border: 1px solid var(--accent);
+    border-radius: var(--r-md);
+    background: var(--accent-bg);
+    padding: var(--s-3);
+    margin-top: var(--s-3);
+    font-size: var(--t-sm);
+  }
+  .escolha-box h3 {
+    margin: 0 0 var(--s-2);
+    font-size: var(--t-sm);
+    font-weight: 700;
+  }
+  .escolha-box .escolha-linha { color: var(--muted); font-size: var(--t-mini); margin: 0 0 var(--s-3); line-height: 1.5; }
+  .escolha-box label { margin-bottom: var(--s-1); }
+  .escolha-box select { margin-bottom: var(--s-3); }
+  .escolha-acoes { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+  .escolha-acoes button { font-size: var(--t-mini); padding: var(--s-2) var(--s-3); }
+
+  /* Quanto a escolha custa a mais que a mais barata. Laranja é aviso, não
+     erro: escolher a mais cara pode ser a decisão certa — só precisa ficar
+     registrado. */
+  .escolha-delta {
+    display: inline-block;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--r-sm);
+    padding: 2px var(--s-2);
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .escolha-feita {
+    border: 1px solid var(--best-border);
+    background: var(--best-bg);
+    border-radius: var(--r-md);
+    padding: var(--s-3);
+    margin-top: var(--s-3);
+    font-size: var(--t-sm);
+    line-height: 1.5;
+  }
+  .escolha-feita strong { display: block; margin-bottom: var(--s-1); }
 </style>
 </head>
 <body>
@@ -875,6 +943,26 @@
             <button type="button" class="secondary" id="btn-buscar-parc">Buscar no Sankhya</button>
           </div>
           <div class="lookup-status" id="lookup-status"></div>
+
+          <!-- Campo mais importante do formulário, por mais simples que pareça:
+               sem o número da nota, toda cotação nasce órfã e nunca dá pra
+               cruzar com o Sankhya depois — nem pra saber quanto foi cotado
+               contra quanto foi pago. Fica opcional de propósito, porque
+               existe cotação feita antes de a nota existir; nesse caso dá pra
+               preencher depois pela tela de Histórico. -->
+          <div class="grid cols-3" style="margin-top: 14px;">
+            <div class="field" style="margin-bottom:0;">
+              <label>Nº da nota no Sankhya <span style="font-weight:400; color:var(--muted);">(NUNOTA)</span></label>
+              <input type="number" id="nunota" placeholder="Ex.: 407021" min="1" step="1">
+            </div>
+            <div class="field" style="grid-column: span 2; margin-bottom:0; align-self:end;">
+              <p class="arch-note" style="margin:0;">
+                É o que liga esta cotação à nota. Sem ele, o comparativo
+                Cotado&nbsp;×&nbsp;Realizado não consegue achar esta cotação depois.
+                Se a nota ainda não existe, deixe em branco e preencha pelo Histórico.
+              </p>
+            </div>
+          </div>
         </div>
 
         <form id="form-cotacao">
@@ -994,6 +1082,10 @@
             <div class="results-head"><span>Transportadora</span><span>Prazo</span><span>Valor</span><span>Status</span></div>
             <div id="lista-resultados"></div>
           </div>
+
+          <!-- Onde a escolha é registrada. Fica vazio até a primeira cotação. -->
+          <div id="escolha-area"></div>
+
           <p class="arch-note">
             Consultadas em paralelo — o tempo de espera é o da transportadora mais lenta, não a soma de todas.
           </p>
@@ -1165,6 +1257,45 @@
   btnTheme.addEventListener('click', () => {
     aplicarTema(root.dataset.theme === 'dark' ? 'light' : 'dark', true);
   });
+
+  // ================= Quem está usando =================
+  // O /api/me devolve o usuário da sessão (a infraestrutura de login por
+  // usuário já existe: APP_USERS + SESSION_SECRET). Serve para duas coisas:
+  // mostrar quem está logado na barra lateral, e carimbar cada cotação com
+  // quem a fez — sem isso, "quem escolheu esta transportadora" é uma pergunta
+  // sem resposta.
+  //
+  // Se o login ainda não estiver configurado no Vercel, a barra lateral
+  // mostra "Sem login configurado" em vez de um nome inventado.
+  let usuarioLogado = null;
+
+  function iniciais(nome) {
+    const partes = String(nome).trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+  }
+
+  fetch('/api/me', { headers: { 'X-Requested-With': 'motor-rareway' } })
+    .then((r) => r.json())
+    .then((j) => {
+      const elNome = document.getElementById('user-nome');
+      const elPapel = document.getElementById('user-papel');
+      const elAv = document.getElementById('user-av');
+      if (!elNome || !elPapel || !elAv) return;
+
+      if (j && j.usuario) {
+        usuarioLogado = j.usuario;
+        elNome.textContent = j.usuario;
+        elAv.textContent = iniciais(j.usuario);
+        elPapel.textContent = 'Sessão ativa';
+      } else {
+        elNome.textContent = 'Sem login individual';
+        elAv.textContent = '—';
+        elPapel.textContent = 'Acesso por senha compartilhada';
+      }
+    })
+    .catch(() => { /* sem sessão legível: a barra lateral fica como está */ });
 
   // ================= Sair (logout) =================
   // Chama o mesmo endpoint que zera o cookie de sessão (api/logout.js) e
@@ -1731,9 +1862,13 @@
     lookupStatusCnpj.style.color = '';
     tagSankhya.style.display = 'none';
 
+    document.getElementById('nunota').value = '';
+
     statusLine.textContent = '';
     resultadosPanel.style.display = 'none';
     listaResultados.innerHTML = '';
+    escolhaArea.innerHTML = '';
+    estadoCotacao = { id: null, respostas: [], dados: null, registrada: false };
 
     document.getElementById('codParc').focus();
   });
@@ -1862,7 +1997,7 @@
     respostas.sort((a, b) => a.valor - b.valor);
 
     listaResultados.innerHTML = respostas.map((r, i) => `
-      <div class="carrier-row ${i === 0 ? 'best' : ''} fade-in">
+      <div class="carrier-row clicavel ${i === 0 ? 'best' : ''} fade-in" data-indice="${i}" role="button" tabindex="0" aria-label="Escolher ${escapeHtml(r.transportadora.nome)}">
         <div class="logo-dot">${r.transportadora.sigla}</div>
         <div>
           <div class="carrier-name">${r.transportadora.nome}</div>
@@ -1889,6 +2024,14 @@
     // Dispara depois que a cotação já terminou e já apareceu na tela — se essa
     // chamada falhar (ex.: banco não conectado), não pode travar nem atrasar o
     // operador, por isso não usa await e ignora qualquer erro em silêncio.
+    // O estado desta rodada é criado ANTES da gravação, e o id chega nele
+    // quando o POST responde. Guardar a referência (estaCotacao) em vez de
+    // usar a variável global evita que uma cotação disparada logo em seguida
+    // receba o id da anterior.
+    const estaCotacao = { id: null, respostas, dados, registrada: false };
+    estadoCotacao = estaCotacao;
+    montarEscolha();
+
     fetch('/api/historico-cotacoes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
@@ -1899,15 +2042,168 @@
         pesoTotal: dados.pesoTotal,
         valorMerc: dados.valorMerc,
         tipoFrete: dados.tipoFrete,
+        // Quem, para qual nota, de qual empresa. O CODEMP é fixo em 1 porque
+        // o remetente do motor hoje é só a Matriz; quando o bloco de
+        // Remetente virar seletor (Fase 5), este valor vem de lá.
+        nunota: parseInt(document.getElementById('nunota').value, 10) || null,
+        codemp: 1,
+        usuario: usuarioLogado,
         resultados: respostas.map((r) => ({ transportadora: r.transportadora.nome, modal: r.modal, prazoDias: r.prazoDias, valor: r.valor })),
         erros: erros.map((e) => ({ transportadora: e.transportadora.nome, modal: e.modal, mensagem: e.mensagem })),
         melhor: respostas.length ? { transportadora: respostas[0].transportadora.nome, valor: respostas[0].valor, prazoDias: respostas[0].prazoDias } : null,
       }),
-    }).catch(() => { /* log de apoio — falha aqui não deve incomodar o operador */ });
+    })
+      .then((r) => r.json())
+      .then((j) => { estaCotacao.id = j && j.id ? j.id : null; })
+      .catch(() => { /* log de apoio — falha aqui não deve incomodar o operador */ });
 
     btnCotar.textContent = textoOriginalBotao;
     btnCotar.disabled = false;
   });
+
+  // ================= Escolha da transportadora e o motivo =================
+  // O comparativo dizia quanto cada uma cobra e parava aí. Quem escolhia,
+  // escolhia fora do sistema, e o porquê sumia. Sem esse registro não existe
+  // "Cotado × Realizado": o valor que vai para a nota é o preço que a
+  // transportadora cobrou, não uma cotação — comparar os dois é comparar um
+  // número com ele mesmo.
+  //
+  // A regra de atrito: escolher a mais barata é um clique e um confirmar (o
+  // motivo se preenche sozinho). Escolher outra pede o motivo e mostra quanto
+  // custa a mais. O incômodo fica onde a informação é valiosa.
+
+  const MOTIVOS = [
+    { valor: 'MENOR_PRAZO',  texto: 'Menor prazo de entrega' },
+    { valor: 'EXIG_CLIENTE', texto: 'Exigência do cliente' },
+    { valor: 'RESTR_REGIAO', texto: 'Restrição de região / cobertura' },
+    { valor: 'TRANSP_BLOQ',  texto: 'Transportadora mais barata bloqueada' },
+    { valor: 'OUTRO',        texto: 'Outro motivo' },
+  ];
+
+  let estadoCotacao = { id: null, respostas: [], dados: null, registrada: false };
+  const escolhaArea = document.getElementById('escolha-area');
+
+  function brl(v) {
+    return 'R$ ' + Number(v).toFixed(2).replace('.', ',');
+  }
+
+  function montarEscolha() {
+    escolhaArea.innerHTML = '';
+    if (!estadoCotacao.respostas.length) return;
+
+    escolhaArea.innerHTML = '<p class="escolha-hint">Clique na transportadora que você vai usar para registrar a escolha.</p>';
+
+    listaResultados.querySelectorAll('.carrier-row.clicavel').forEach((linha) => {
+      const selecionar = () => selecionarTransportadora(Number(linha.dataset.indice));
+      linha.addEventListener('click', selecionar);
+      linha.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selecionar(); }
+      });
+    });
+  }
+
+  function selecionarTransportadora(indice) {
+    if (estadoCotacao.registrada) return;
+
+    const escolhida = estadoCotacao.respostas[indice];
+    const maisBarata = estadoCotacao.respostas[0];
+    if (!escolhida) return;
+
+    listaResultados.querySelectorAll('.carrier-row').forEach((l) => l.classList.remove('selecionada'));
+    const linha = listaResultados.querySelector(`.carrier-row[data-indice="${indice}"]`);
+    if (linha) linha.classList.add('selecionada');
+
+    // Arredonda aqui e não só na exibição: sem isso vai
+    // 26.590000000000003 para uma coluna de dinheiro no banco, e soma de
+    // centavos tortos dá relatório torto.
+    const diferenca = Math.round((escolhida.valor - maisBarata.valor) * 100) / 100;
+    const ehMaisBarata = indice === 0;
+
+    const opcoes = MOTIVOS.map((m) => `<option value="${m.valor}">${m.texto}</option>`).join('');
+
+    escolhaArea.innerHTML = `
+      <div class="escolha-box">
+        <h3>Usar ${escapeHtml(escolhida.transportadora.nome)} — ${brl(escolhida.valor)}</h3>
+        ${ehMaisBarata
+          ? '<p class="escolha-linha">É a proposta mais barata desta rodada. O motivo fica registrado como <strong>menor preço</strong>.</p>'
+          : `<p class="escolha-linha">Custa <span class="escolha-delta">${brl(diferenca)} a mais</span> que a ${escapeHtml(maisBarata.transportadora.nome)}, que saiu por ${brl(maisBarata.valor)}. Registrar o motivo é o que permite, daqui a seis meses, saber se valeu a pena.</p>
+             <label for="motivo-escolha">Por que esta e não a mais barata?</label>
+             <select id="motivo-escolha">${opcoes}</select>`}
+        <div class="escolha-acoes">
+          <button type="button" class="primary" id="btn-confirmar-escolha">Confirmar escolha</button>
+          <button type="button" class="secondary" id="btn-cancelar-escolha">Cancelar</button>
+          <span class="status-line" id="status-escolha"></span>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-cancelar-escolha').addEventListener('click', () => {
+      listaResultados.querySelectorAll('.carrier-row').forEach((l) => l.classList.remove('selecionada'));
+      montarEscolha();
+    });
+
+    document.getElementById('btn-confirmar-escolha').addEventListener('click', () => {
+      const motivo = ehMaisBarata ? 'MENOR_PRECO' : document.getElementById('motivo-escolha').value;
+      confirmarEscolha(indice, motivo, diferenca);
+    });
+
+    escolhaArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function confirmarEscolha(indice, motivo, diferenca) {
+    const escolhida = estadoCotacao.respostas[indice];
+    const btn = document.getElementById('btn-confirmar-escolha');
+    btn.disabled = true;
+    btn.textContent = 'Registrando…';
+
+    // A escolha é gravada contra o id da cotação. Se o POST do histórico ainda
+    // não voltou (ou o banco não está conectado), não dá pra amarrar as duas
+    // pontas — e é melhor dizer isso do que fingir que registrou.
+    let guardado = false;
+    if (estadoCotacao.id) {
+      try {
+        const resp = await fetch('/api/historico-cotacoes', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+          body: JSON.stringify({
+            id: estadoCotacao.id,
+            transportadora: escolhida.transportadora.nome,
+            modal: escolhida.modal,
+            valor: escolhida.valor,
+            prazoDias: escolhida.prazoDias,
+            motivo,
+            diferencaParaMenor: diferenca,
+          }),
+        });
+        const json = await resp.json();
+        guardado = Boolean(json && json.guardado);
+      } catch { guardado = false; }
+    }
+
+    estadoCotacao.registrada = true;
+
+    listaResultados.querySelectorAll('.carrier-row').forEach((l) => {
+      l.classList.remove('selecionada', 'clicavel');
+      l.removeAttribute('role');
+      l.removeAttribute('tabindex');
+      if (Number(l.dataset.indice) === indice) l.classList.add('escolhida');
+      else if (l.dataset.indice !== undefined) l.classList.add('descartada');
+    });
+
+    const rotuloMotivo = motivo === 'MENOR_PRECO'
+      ? 'menor preço'
+      : (MOTIVOS.find((m) => m.valor === motivo) || {}).texto.toLowerCase();
+
+    escolhaArea.innerHTML = `
+      <div class="escolha-feita">
+        <strong>✓ ${escapeHtml(escolhida.transportadora.nome)} registrada — ${brl(escolhida.valor)}</strong>
+        Motivo: ${rotuloMotivo}${diferenca > 0 ? ` · ${brl(diferenca)} a mais que a mais barata` : ''}.
+        ${guardado
+          ? 'Escolha gravada no histórico.'
+          : '<span style="color:var(--warn-border); font-weight:700;">Não foi possível gravar no histórico</span> — a escolha vale para esta tela, mas não ficou registrada. Confira se o banco está conectado.'}
+      </div>
+    `;
+  }
 
   // ================= Faixa de resultados (v2) =================
   // O painel #resultados é mostrado/escondido pelo código de cotação mexendo

@@ -46,7 +46,40 @@ async function garantirTabela() {
   // pra comparar tudo direto por SQL, sem precisar abrir o JSON de
   // "resultados"). IF NOT EXISTS deixa isso seguro de rodar sempre.
   await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS melhor_prazo_dias NUMERIC`;
+
+  // ===== Escolha do operador (18/09/2026) =====
+  // Até aqui o histórico guardava a cotação MAIS BARATA ("melhor"), que não é
+  // a mesma coisa que a ESCOLHIDA. Sem essa distinção não dá pra responder a
+  // pergunta que o projeto inteiro existe pra responder: cotamos com quem
+  // devia? Quando o operador escolhe a mais barata, o motivo é preenchido
+  // sozinho; quando escolhe outra, ele diz por quê — e a diferença em reais
+  // para a mais barata fica registrada ao lado.
+  //
+  // E o vínculo com a nota: sem NUNOTA toda cotação nasce órfã e nunca dá
+  // pra cruzar com o Sankhya depois.
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS nunota INTEGER`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS codemp INTEGER`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS usuario TEXT`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhida_transportadora TEXT`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhida_modal TEXT`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhida_valor NUMERIC`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhida_prazo_dias NUMERIC`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS motivo_escolha TEXT`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS diferenca_para_menor NUMERIC`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhido_em TIMESTAMPTZ`;
 }
+
+// Lista fechada de motivos. Fica no servidor também (não só na tela) pra que
+// um valor fora da lista nunca entre no banco — relatório com categoria
+// digitada à mão vira categoria inútil em três meses.
+const MOTIVOS_VALIDOS = [
+  'MENOR_PRECO',
+  'MENOR_PRAZO',
+  'EXIG_CLIENTE',
+  'RESTR_REGIAO',
+  'TRANSP_BLOQ',
+  'OUTRO',
+];
 
 module.exports = async (req, res) => {
   if (req.method === 'GET') {
@@ -92,7 +125,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'PATCH') {
     res.status(405).json({ erro: true, mensagem: 'Método não permitido' });
     return;
   }
@@ -100,6 +133,46 @@ module.exports = async (req, res) => {
   // Mesma trava simples contra CSRF usada nas outras funções.
   if (req.headers['x-requested-with'] !== 'motor-rareway') {
     res.status(403).json({ erro: true, mensagem: 'Requisição não autorizada.' });
+    return;
+  }
+
+  // ===== PATCH: registrar a escolha do operador numa cotação já gravada =====
+  // Separado do POST de propósito: a cotação é gravada assim que as respostas
+  // chegam, e a escolha acontece depois — às vezes um minuto depois, às vezes
+  // nunca (o operador desiste). Uma cotação sem escolha também é informação:
+  // diz que consultamos e não usamos.
+  if (req.method === 'PATCH') {
+    if (!bancoConfigurado()) {
+      res.status(200).json({ ok: true, guardado: false });
+      return;
+    }
+    const e = req.body || {};
+    const id = Number(e.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ erro: true, mensagem: 'id da cotação inválido.' });
+      return;
+    }
+    if (!MOTIVOS_VALIDOS.includes(e.motivo)) {
+      res.status(400).json({ erro: true, mensagem: 'Motivo da escolha fora da lista.' });
+      return;
+    }
+    try {
+      await garantirTabela();
+      await sql`
+        UPDATE historico_cotacoes SET
+          escolhida_transportadora = ${e.transportadora || null},
+          escolhida_modal          = ${e.modal || null},
+          escolhida_valor          = ${e.valor != null ? Number(e.valor) : null},
+          escolhida_prazo_dias     = ${e.prazoDias != null ? Number(e.prazoDias) : null},
+          motivo_escolha           = ${e.motivo},
+          diferenca_para_menor     = ${e.diferencaParaMenor != null ? Number(e.diferencaParaMenor) : null},
+          escolhido_em             = now()
+        WHERE id = ${id}
+      `;
+      res.status(200).json({ ok: true, guardado: true });
+    } catch (err) {
+      res.status(200).json({ ok: true, guardado: false, mensagem: err.message });
+    }
     return;
   }
 
@@ -117,10 +190,14 @@ module.exports = async (req, res) => {
     const melhor = registro.melhor || null;
     const percentual = melhor && registro.valorMerc ? (Number(melhor.valor) / Number(registro.valorMerc)) * 100 : null;
 
-    await sql`
+    const nunota = Number(registro.nunota);
+    const codemp = Number(registro.codemp);
+
+    const { rows } = await sql`
       INSERT INTO historico_cotacoes
         (cliente, cnpj_dest, cidade_dest, peso_total, valor_merc, tipo_frete,
-         melhor_transportadora, melhor_valor, melhor_percentual, melhor_prazo_dias, resultados, erros)
+         melhor_transportadora, melhor_valor, melhor_percentual, melhor_prazo_dias,
+         nunota, codemp, usuario, resultados, erros)
       VALUES (
         ${registro.cliente || null},
         ${registro.cnpjDest || null},
@@ -132,11 +209,16 @@ module.exports = async (req, res) => {
         ${melhor ? melhor.valor : null},
         ${percentual},
         ${melhor ? melhor.prazoDias : null},
+        ${Number.isInteger(nunota) && nunota > 0 ? nunota : null},
+        ${Number.isInteger(codemp) && codemp > 0 ? codemp : null},
+        ${registro.usuario || null},
         ${JSON.stringify(registro.resultados || [])},
         ${JSON.stringify(registro.erros || [])}
       )
+      RETURNING id
     `;
-    res.status(200).json({ ok: true, guardado: true });
+    // Devolve o id para a tela poder registrar a escolha depois (PATCH).
+    res.status(200).json({ ok: true, guardado: true, id: rows[0]?.id ?? null });
   } catch (err) {
     // Falha ao guardar o histórico não deve incomodar o operador — a
     // cotação em si já foi concluída antes desta chamada.
