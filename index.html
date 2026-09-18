@@ -561,6 +561,52 @@
   .hist-sem-escolha { color: var(--muted); font-style: italic; }
   .hist-falhou { color: var(--erro); font-size: 12px; }
 
+  /* ===== Resumo de confiabilidade =====
+     Contar falha por falha na tabela é trabalho de humano fazendo trabalho de
+     máquina — e foi assim que eu culpei a transportadora errada. Este bloco
+     responde "quem está falhando" de uma vez, com denominador, para separar
+     "falhou 4 vezes" de "falhou 4 vezes em 40". */
+  .hist-resumo {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg-soft);
+    padding: var(--s-3) var(--s-4);
+    margin-bottom: var(--s-4);
+  }
+  .hist-resumo-topo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-6);
+    margin-bottom: var(--s-3);
+  }
+  .hist-resumo-num { font-size: var(--t-md); font-weight: 800; }
+  .hist-resumo-rot { color: var(--muted); font-size: 12px; }
+  .hist-barras { display: grid; gap: 6px; }
+  .hist-barra {
+    display: grid;
+    grid-template-columns: 110px 1fr 150px;
+    gap: var(--s-3);
+    align-items: center;
+    font-size: 12px;
+  }
+  .hist-barra-nome { font-weight: 700; }
+  .hist-barra-trilho {
+    height: 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 22%, transparent);
+    overflow: hidden;
+  }
+  /* display:block é obrigatório: o trilho não é grid nem flex, então um span
+     filho continua inline e ignora width/height — a barra ficava sempre vazia. */
+  .hist-barra-preenche { display: block; height: 100%; border-radius: 999px; background: var(--erro); }
+  .hist-barra-zero .hist-barra-preenche { background: transparent; }
+  .hist-barra-val { color: var(--muted); text-align: right; white-space: nowrap; }
+  @media (max-width: 720px) {
+    .hist-barra { grid-template-columns: 1fr; gap: 2px; }
+    .hist-barra-val { text-align: left; }
+  }
+
   @media (max-width: 720px) {
     .historico-head { display: none; }
     .historico-row { grid-template-columns: 1fr 1fr; row-gap: 4px; }
@@ -1519,14 +1565,86 @@
   function celulaConsultas(h) {
     const nOk = (h.resultados || []).length;
     const erros = h.erros || [];
-    const total = nOk + erros.length;
-    if (!erros.length) return `${nOk} de ${total}`;
+    // Antes dizia "3 de 4", e o 4 parecia número de transportadoras. Não é:
+    // a Braspress devolve duas respostas (rodoviário e aéreo) quando a rota
+    // permite, então "4 de 4" e "3 de 3" podiam ser a mesma situação. O que
+    // importa é quantos preços voltaram e quem não respondeu — e quem não
+    // respondeu está logo abaixo, pelo nome.
+    const base = `${nOk} ${nOk === 1 ? 'resposta' : 'respostas'}`;
+    if (!erros.length) return base;
 
     const nomes = [...new Set(erros.map((e) => e && e.transportadora).filter(Boolean))];
     const detalhe = nomes.length
       ? `${nomes.length > 1 ? 'falharam' : 'falhou'}: ${escapeHtml(nomes.join(', '))}`
       : `${erros.length} sem resposta`;
-    return `${nOk} de ${total}<br><span class="hist-falhou">${detalhe}</span>`;
+    return `${base}<br><span class="hist-falhou">${detalhe}</span>`;
+  }
+
+  // Confiabilidade por transportadora, calculada no navegador em cima das
+  // cotações que a tela já carregou — sem consulta nova, sem endpoint novo.
+  //
+  // A contagem é POR COTAÇÃO, não por resposta: numa cotação a Braspress pode
+  // aparecer duas vezes (rodoviário e aéreo) e isso não significa que ela foi
+  // consultada duas vezes. Por isso cada transportadora conta no máximo uma
+  // vez por cotação, dos dois lados.
+  function resumoConfiabilidade(historico) {
+    const porTransp = new Map();
+    let comFalha = 0;
+
+    historico.forEach((h) => {
+      const ok = (h.resultados || []).map((r) => r && r.transportadora).filter(Boolean);
+      const ruim = (h.erros || []).map((e) => e && e.transportadora).filter(Boolean);
+      const presentes = new Set([...ok, ...ruim]);
+      const falharam = new Set(ruim);
+      if ((h.erros || []).length) comFalha++;
+
+      presentes.forEach((nome) => {
+        if (!porTransp.has(nome)) porTransp.set(nome, { nome, consultas: 0, falhas: 0 });
+        const t = porTransp.get(nome);
+        t.consultas++;
+        if (falharam.has(nome)) t.falhas++;
+      });
+    });
+
+    const linhas = [...porTransp.values()]
+      .map((t) => ({ ...t, taxa: t.consultas ? t.falhas / t.consultas : 0 }))
+      // Mais problemático primeiro: taxa, e o volume desempata — 1 falha em 2
+      // não é o mesmo problema que 8 em 16.
+      .sort((a, b) => b.taxa - a.taxa || b.falhas - a.falhas || a.nome.localeCompare(b.nome));
+
+    const datas = historico.map((h) => new Date(h.dataHora)).filter((d) => !isNaN(d));
+    const periodo = datas.length
+      ? { de: new Date(Math.min(...datas)), ate: new Date(Math.max(...datas)) }
+      : null;
+
+    return { total: historico.length, comFalha, linhas, periodo };
+  }
+
+  function blocoResumo(historico) {
+    const r = resumoConfiabilidade(historico);
+    if (!r.total) return '';
+    const dia = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const pct = (v) => (v * 100).toFixed(0);
+    const pctFalha = r.total ? pct(r.comFalha / r.total) : '0';
+
+    const barras = r.linhas.map((t) => `
+      <div class="hist-barra ${t.falhas ? '' : 'hist-barra-zero'}">
+        <span class="hist-barra-nome">${escapeHtml(t.nome)}</span>
+        <span class="hist-barra-trilho"><span class="hist-barra-preenche" style="width:${pct(t.taxa)}%"></span></span>
+        <span class="hist-barra-val">${t.falhas} de ${t.consultas} · ${pct(t.taxa)}%</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="hist-resumo">
+        <div class="hist-resumo-topo">
+          <span><span class="hist-resumo-num">${r.total}</span> <span class="hist-resumo-rot">cotações${r.periodo ? ' · ' + dia(r.periodo.de) + ' a ' + dia(r.periodo.ate) : ''}</span></span>
+          <span><span class="hist-resumo-num">${r.comFalha}</span> <span class="hist-resumo-rot">com alguma falha (${pctFalha}%)</span></span>
+        </div>
+        ${barras ? `<div class="hist-barras">${barras}</div>
+        <p class="arch-note" style="margin:8px 0 0;">Falhas por cotação em que a transportadora foi consultada — não por resposta, porque a Braspress devolve rodoviário e aéreo na mesma cotação.</p>` : ''}
+      </div>
+    `;
   }
 
   // Busca só quando a tela é aberta (não no carregamento da página) porque a
@@ -1551,6 +1669,7 @@
       }
 
       lista.innerHTML = `
+        ${blocoResumo(historico)}
         <div class="historico-table">
           <div class="historico-head">
             <span>Data/hora</span>
@@ -1558,7 +1677,7 @@
             <span>Peso</span>
             <span>Pedido</span>
             <span>Escolhida</span>
-            <span>Consultas</span>
+            <span>Respostas</span>
           </div>
           ${historico.map((h) => `
             <div class="historico-row">
