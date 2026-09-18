@@ -602,6 +602,28 @@
   .hist-barra-preenche { display: block; height: 100%; border-radius: 999px; background: var(--erro); }
   .hist-barra-zero .hist-barra-preenche { background: transparent; }
   .hist-barra-val { color: var(--muted); text-align: right; white-space: nowrap; }
+
+  /* ===== Mensagens de erro agrupadas =====
+     O texto cru que cada transportadora devolveu. É o que separa "não atendo
+     esse trecho" (regra de cobertura) de 401/timeout/500 (defeito nosso ou
+     deles) — e as duas coisas pedem soluções opostas. */
+  .hist-msgs { margin-top: var(--s-4); border-top: 1px solid var(--border); padding-top: var(--s-3); }
+  .hist-msgs-titulo {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: var(--s-2);
+  }
+  .hist-msg-transp { margin-bottom: var(--s-3); }
+  .hist-msg-transp > strong { font-size: 12px; }
+  .hist-msg-linha {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: var(--s-2);
+    align-items: baseline;
+    font-size: 12px;
+    padding: 2px 0;
+  }
+  .hist-msg-n { color: var(--erro); font-weight: 800; text-align: right; }
+  .hist-msg-txt { color: var(--muted); word-break: break-word; }
   @media (max-width: 720px) {
     .hist-barra { grid-template-columns: 1fr; gap: 2px; }
     .hist-barra-val { text-align: left; }
@@ -1620,6 +1642,85 @@
     return { total: historico.length, comFalha, linhas, periodo };
   }
 
+  // Agrupa o texto cru que cada transportadora devolveu quando falhou.
+  //
+  // Por que isso existe: "a Rodonaves falhou 18 vezes" não diz o que fazer.
+  // "18 vezes 'token inválido'" é bug nosso; "18 vezes 'localidade não
+  // atendida'" é regra de cobertura. As duas leituras levam a soluções
+  // opostas, e adivinhar entre elas já me fez errar duas vezes aqui.
+  //
+  // A normalização é só para AGRUPAR: números longos (CEP, protocolo, id de
+  // requisição) viram um marcador, senão cada mensagem vira um grupo de um e
+  // a contagem não serve para nada. O texto exibido é o primeiro original do
+  // grupo, sem máscara — quem lê precisa ver o que a transportadora escreveu,
+  // não a minha versão dela.
+  function chaveMensagem(txt) {
+    return String(txt)
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/\d[\d.\-/]{4,}\d/g, '#')
+      .toLowerCase()
+      .slice(0, 160);
+  }
+
+  function mensagensDeErro(historico) {
+    const porTransp = new Map();
+
+    historico.forEach((h) => {
+      (h.erros || []).forEach((e) => {
+        if (!e) return;
+        const nome = e.transportadora || '(sem nome)';
+        const txt = (e.mensagem || '').trim() || '(sem mensagem)';
+        if (!porTransp.has(nome)) porTransp.set(nome, { nome, total: 0, grupos: new Map() });
+        const t = porTransp.get(nome);
+        t.total++;
+        const k = chaveMensagem(txt);
+        if (!t.grupos.has(k)) t.grupos.set(k, { exemplo: txt, n: 0 });
+        t.grupos.get(k).n++;
+      });
+    });
+
+    return [...porTransp.values()]
+      .map((t) => ({
+        nome: t.nome,
+        total: t.total,
+        grupos: [...t.grupos.values()].sort((a, b) => b.n - a.n),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }
+
+  function blocoMensagens(historico) {
+    const transps = mensagensDeErro(historico);
+    if (!transps.length) return '';
+
+    const corta = (s) => (s.length > 200 ? s.slice(0, 200) + '…' : s);
+
+    const blocos = transps.map((t) => {
+      // Teto de 6 por transportadora: a cauda longa não muda a decisão e
+      // transformaria o resumo num log.
+      const mostra = t.grupos.slice(0, 6);
+      const resto = t.grupos.slice(6).reduce((s, g) => s + g.n, 0);
+      const linhas = mostra.map((g) => `
+        <div class="hist-msg-linha">
+          <span class="hist-msg-n">${g.n}×</span>
+          <span class="hist-msg-txt" title="${escapeHtml(g.exemplo)}">${escapeHtml(corta(g.exemplo))}</span>
+        </div>
+      `).join('');
+      const cauda = resto
+        ? `<div class="hist-msg-linha"><span class="hist-msg-n">${resto}×</span><span class="hist-msg-txt">outras mensagens</span></div>`
+        : '';
+      return `<div class="hist-msg-transp"><strong>${escapeHtml(t.nome)}</strong> — ${t.total} ${t.total === 1 ? 'falha' : 'falhas'}${linhas}${cauda}</div>`;
+    }).join('');
+
+    return `
+      <div class="hist-msgs">
+        <div class="hist-msgs-titulo">O que cada uma respondeu</div>
+        ${blocos}
+        <p class="arch-note" style="margin:4px 0 0;">Texto devolvido pela transportadora, sem tradução. Mensagens quase iguais são agrupadas ignorando números longos (CEP, protocolo), então a contagem soma variações do mesmo erro.</p>
+      </div>
+    `;
+  }
+
   function blocoResumo(historico) {
     const r = resumoConfiabilidade(historico);
     if (!r.total) return '';
@@ -1643,6 +1744,7 @@
         </div>
         ${barras ? `<div class="hist-barras">${barras}</div>
         <p class="arch-note" style="margin:8px 0 0;">Falhas por cotação em que a transportadora foi consultada — não por resposta, porque a Braspress devolve rodoviário e aéreo na mesma cotação.</p>` : ''}
+        ${blocoMensagens(historico)}
       </div>
     `;
   }
