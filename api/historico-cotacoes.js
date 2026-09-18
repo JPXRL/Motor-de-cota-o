@@ -93,7 +93,10 @@ module.exports = async (req, res) => {
       const { rows } = await sql`
         SELECT id, criado_em, cliente, cnpj_dest, cidade_dest, peso_total, valor_merc,
                tipo_frete, melhor_transportadora, melhor_valor, melhor_percentual,
-               melhor_prazo_dias, resultados, erros
+               melhor_prazo_dias, resultados, erros,
+               nunota, usuario,
+               escolhida_transportadora, escolhida_modal, escolhida_valor,
+               escolhida_prazo_dias, motivo_escolha, diferenca_para_menor, escolhido_em
         FROM historico_cotacoes
         ORDER BY criado_em DESC
         LIMIT 200
@@ -115,6 +118,24 @@ module.exports = async (req, res) => {
               prazoDias: r.melhor_prazo_dias !== null ? Number(r.melhor_prazo_dias) : null,
             }
           : null,
+        // A ESCOLHA do operador — diferente da "melhor" (mais barata) acima.
+        // Vem nula nas cotações anteriores a 18/09/2026 e em toda cotação em
+        // que ninguém escolheu ninguém; a tela mostra isso como "não
+        // registrada" em vez de esconder, porque cotação consultada e não
+        // usada também é informação.
+        escolha: r.escolhida_transportadora
+          ? {
+              transportadora: r.escolhida_transportadora,
+              modal: r.escolhida_modal,
+              valor: r.escolhida_valor !== null ? Number(r.escolhida_valor) : null,
+              prazoDias: r.escolhida_prazo_dias !== null ? Number(r.escolhida_prazo_dias) : null,
+              motivo: r.motivo_escolha,
+              diferencaParaMenor: r.diferenca_para_menor !== null ? Number(r.diferenca_para_menor) : null,
+              em: r.escolhido_em,
+            }
+          : null,
+        nunota: r.nunota !== null ? Number(r.nunota) : null,
+        usuario: r.usuario,
         resultados: r.resultados || [],
         erros: r.erros || [],
       }));

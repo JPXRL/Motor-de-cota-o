@@ -524,7 +524,7 @@
   .historico-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .historico-head {
     display: grid;
-    grid-template-columns: 1.1fr 1.6fr 0.8fr 0.9fr 1.3fr 0.9fr;
+    grid-template-columns: 1fr 1.5fr 0.6fr 0.9fr 2fr 1.1fr;
     gap: 12px;
     padding: 10px 12px;
     background: var(--bg-soft);
@@ -536,14 +536,31 @@
   }
   .historico-row {
     display: grid;
-    grid-template-columns: 1.1fr 1.6fr 0.8fr 0.9fr 1.3fr 0.9fr;
+    grid-template-columns: 1fr 1.5fr 0.6fr 0.9fr 2fr 1.1fr;
     gap: 12px;
-    align-items: center;
+    align-items: start;
     padding: 12px;
     border-top: 1px solid var(--border);
     font-size: 13px;
   }
   .historico-row .muted { color: var(--muted); font-size: 12px; }
+
+  /* A escolha do operador. O que o olho precisa achar nesta tabela não é o
+     preço — é o par "escolhemos X, a mais barata era Y" e o quanto isso
+     custou. Por isso a diferença em reais é a única coisa colorida aqui. */
+  .hist-escolhida { font-weight: 700; }
+  .hist-mais {
+    color: var(--warn-border);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .hist-igual { color: var(--muted); }
+  /* Cotação sem escolha registrada não é um buraco a esconder: é o estado
+     normal de tudo que foi cotado antes de 18/09/2026 e de toda consulta que
+     não virou embarque. Fica em itálico apagado, legível como ausência. */
+  .hist-sem-escolha { color: var(--muted); font-style: italic; }
+  .hist-falhou { color: var(--erro); font-size: 12px; }
+
   @media (max-width: 720px) {
     .historico-head { display: none; }
     .historico-row { grid-template-columns: 1fr 1fr; row-gap: 4px; }
@@ -1451,6 +1468,67 @@
   });
 
   // ================= Histórico de cotações (log de apoio) =================
+  // Os códigos de motivo viram texto aqui. Ficam curtos de propósito: a
+  // coluna precisa ser lida de relance, empilhada com a diferença em reais.
+  const MOTIVO_TEXTO = {
+    MENOR_PRECO:  'menor preço',
+    MENOR_PRAZO:  'menor prazo',
+    EXIG_CLIENTE: 'exigência do cliente',
+    RESTR_REGIAO: 'restrição de região',
+    TRANSP_BLOQ:  'mais barata bloqueada',
+    OUTRO:        'outro motivo',
+  };
+
+  function histMoeda(v) {
+    return 'R$ ' + Number(v).toFixed(2).replace('.', ',');
+  }
+
+  // A coluna que o histórico não tinha. Antes ele mostrava só a MAIS BARATA,
+  // que é a resposta das transportadoras — não a decisão da casa. Quem olhava
+  // a tela não conseguia ver a única coisa que ela deveria provar: escolhemos
+  // com quem devia, e quando não, por quê e por quanto.
+  function celulaEscolha(h) {
+    const maisBarata = h.melhor
+      ? escapeHtml(h.melhor.transportadora) + ' · ' + histMoeda(h.melhor.valor)
+      : '—';
+
+    if (!h.escolha) {
+      return '<span class="hist-sem-escolha">não registrada</span>'
+        + `<br><span class="muted">mais barata: ${maisBarata}</span>`;
+    }
+
+    const e = h.escolha;
+    // Tolerância de meio centavo: diferença menor que isso é ruído de
+    // arredondamento, não decisão de ninguém.
+    const pagouMais = e.diferencaParaMenor != null && e.diferencaParaMenor > 0.005;
+    const motivo = MOTIVO_TEXTO[e.motivo] || e.motivo || '—';
+
+    return `<span class="hist-escolhida">${escapeHtml(e.transportadora)}</span>`
+      + (e.valor != null ? ' · ' + histMoeda(e.valor) : '')
+      + (pagouMais ? ` <span class="hist-mais">+${histMoeda(e.diferencaParaMenor)}</span>` : '')
+      + `<br><span class="muted">${escapeHtml(motivo)}`
+      + (pagouMais ? ` · mais barata: ${maisBarata}` : '')
+      + '</span>';
+  }
+
+  // "3 ok, 1 erro" dizia que faltou alguém, mas não quem. Sem o nome não dá
+  // pra saber se é uma transportadora instável ou uma integração quebrada — e
+  // é isso que decide se o assunto é nosso ou da transportadora. Uma cotação
+  // que saiu com 2 de 4 escolheu entre duas: o comparativo encolheu sem
+  // ninguém perceber.
+  function celulaConsultas(h) {
+    const nOk = (h.resultados || []).length;
+    const erros = h.erros || [];
+    const total = nOk + erros.length;
+    if (!erros.length) return `${nOk} de ${total}`;
+
+    const nomes = [...new Set(erros.map((e) => e && e.transportadora).filter(Boolean))];
+    const detalhe = nomes.length
+      ? `${nomes.length > 1 ? 'falharam' : 'falhou'}: ${escapeHtml(nomes.join(', '))}`
+      : `${erros.length} sem resposta`;
+    return `${nOk} de ${total}<br><span class="hist-falhou">${detalhe}</span>`;
+  }
+
   // Busca só quando a tela é aberta (não no carregamento da página) porque a
   // lista cresce a cada cotação — assim sempre mostra o que há de mais
   // recente, sem precisar recarregar a página inteira.
@@ -1478,18 +1556,18 @@
             <span>Data/hora</span>
             <span>Cliente</span>
             <span>Peso</span>
-            <span>Valor</span>
-            <span>Melhor opção</span>
-            <span>Cotações</span>
+            <span>Pedido</span>
+            <span>Escolhida</span>
+            <span>Consultas</span>
           </div>
           ${historico.map((h) => `
             <div class="historico-row">
-              <span>${escapeHtml(new Date(h.dataHora).toLocaleString('pt-BR'))}</span>
+              <span>${escapeHtml(new Date(h.dataHora).toLocaleString('pt-BR'))}<br><span class="muted">${h.nunota ? 'nota ' + h.nunota : 'sem nota'}</span></span>
               <span>${escapeHtml(h.cliente || h.cnpjDest || '—')}<br><span class="muted">${escapeHtml(h.cidadeDest || '')}</span></span>
               <span>${h.pesoTotal ? String(h.pesoTotal).replace('.', ',') + ' kg' : '—'}</span>
-              <span>${h.valorMerc ? 'R$ ' + Number(h.valorMerc).toFixed(2).replace('.', ',') : '—'}</span>
-              <span>${h.melhor ? escapeHtml(h.melhor.transportadora) + ' · R$ ' + Number(h.melhor.valor).toFixed(2).replace('.', ',') + (h.melhor.percentual != null ? ` (${Number(h.melhor.percentual).toFixed(1).replace('.', ',')}% do pedido)` : '') + (h.melhor.prazoDias != null ? ` · ${h.melhor.prazoDias} dia${h.melhor.prazoDias > 1 ? 's' : ''}` : '') : '—'}</span>
-              <span>${(h.resultados || []).length} ok${(h.erros || []).length ? `, ${h.erros.length} erro` : ''}</span>
+              <span>${h.valorMerc ? histMoeda(h.valorMerc) : '—'}</span>
+              <span>${celulaEscolha(h)}</span>
+              <span>${celulaConsultas(h)}</span>
             </div>
           `).join('')}
         </div>
