@@ -635,6 +635,15 @@
   }
   .hist-msg-n { color: var(--erro); font-weight: 800; text-align: right; }
   .hist-msg-txt { color: var(--muted); word-break: break-word; }
+  /* A data da última ocorrência fica presa ao texto da mensagem, não numa
+     coluna própria: ela é ressalva sobre aquela mensagem, não um dado a
+     comparar linha a linha. */
+  .hist-msg-quando {
+    color: var(--muted);
+    opacity: 0.7;
+    font-size: 11px;
+    white-space: nowrap;
+  }
   @media (max-width: 720px) {
     .hist-barra { grid-template-columns: 1fr; gap: 2px; }
     .hist-barra-val { text-align: left; }
@@ -1678,6 +1687,7 @@
     const porTransp = new Map();
 
     historico.forEach((h) => {
+      const quando = new Date(h.dataHora);
       (h.erros || []).forEach((e) => {
         if (!e) return;
         const nome = e.transportadora || '(sem nome)';
@@ -1686,8 +1696,15 @@
         const t = porTransp.get(nome);
         t.total++;
         const k = chaveMensagem(txt);
-        if (!t.grupos.has(k)) t.grupos.set(k, { exemplo: txt, n: 0 });
-        t.grupos.get(k).n++;
+        if (!t.grupos.has(k)) t.grupos.set(k, { exemplo: txt, n: 0, ultima: null });
+        const g = t.grupos.get(k);
+        g.n++;
+        // Data da ocorrência mais recente. Isso existe por causa de um erro
+        // meu: passei um tempo diagnosticando "HTTP 200 na cotação" antes de
+        // o git mostrar que essa mensagem só existia numa versão do código já
+        // substituída — as ocorrências eram antigas. Sem data, mensagem velha
+        // de código morto parece problema de agora.
+        if (!isNaN(quando) && (!g.ultima || quando > g.ultima)) g.ultima = quando;
       });
     });
 
@@ -1714,7 +1731,7 @@
       const linhas = mostra.map((g) => `
         <div class="hist-msg-linha">
           <span class="hist-msg-n">${g.n}×</span>
-          <span class="hist-msg-txt" title="${escapeHtml(g.exemplo)}">${escapeHtml(corta(g.exemplo))}</span>
+          <span class="hist-msg-txt" title="${escapeHtml(g.exemplo)}">${escapeHtml(corta(g.exemplo))}${g.ultima ? ` <span class="hist-msg-quando">última em ${g.ultima.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>` : ''}</span>
         </div>
       `).join('');
       const cauda = resto

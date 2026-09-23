@@ -243,10 +243,23 @@ module.exports = async (req, res) => {
       // tela, sem precisar abrir o painel do Vercel. Response da Rodonaves,
       // não tem credencial nenhuma aqui.
       console.error('[rodonaves-cotar] resposta de erro da Rodonaves:', JSON.stringify({ status: respCotacao.status, resposta: textoCotacao.slice(0, 1000) }));
-      const motivo = jsonCotacao?.message || jsonCotacao?.mensagem || jsonCotacao?.errors?.[0]?.message || textoCotacao.slice(0, 300);
+      const corpo = textoCotacao.trim();
+      const motivo = jsonCotacao?.message || jsonCotacao?.mensagem || jsonCotacao?.errors?.[0]?.message || corpo.slice(0, 300);
+
+      // Duas situações bem diferentes saíam com a mesma cara. "Rodonaves
+      // retornou HTTP 200" numa mensagem de erro parece falha de transporte, e
+      // não é: ela ACEITOU a consulta e respondeu sem cotação. Pode ser rota
+      // não atendida (recusa comercial disfarçada de sucesso) ou campo com
+      // outro nome na resposta — e essas duas pedem soluções opostas.
+      //
+      // Enquanto não soubermos qual é, a mensagem carrega o corpo cru: a
+      // próxima ocorrência resolve a dúvida sozinha, sem precisar abrir o
+      // painel do Vercel. É resposta da transportadora, não tem credencial.
       res.status(200).json({
         erro: true,
-        mensagem: `Rodonaves retornou HTTP ${respCotacao.status} na cotação${motivo ? `: ${motivo}` : ' (resposta sem ProtocolNumber)'}`,
+        mensagem: respCotacao.ok
+          ? `Rodonaves respondeu HTTP 200 mas sem cotação (sem ProtocolNumber)${corpo ? ` — corpo: ${corpo.slice(0, 300)}` : ' — corpo vazio'}`
+          : `Rodonaves retornou HTTP ${respCotacao.status} na cotação${motivo ? `: ${motivo}` : ''}`,
       });
       return;
     }
