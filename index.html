@@ -1218,6 +1218,10 @@
             <div id="lista-resultados"></div>
           </div>
 
+          <!-- Confirmação do cadastro de destinatário na Rodonaves. Fica
+               vazio até a cotação falhar com "cliente não encontrado". -->
+          <div id="cadastro-rodonaves-area"></div>
+
           <!-- Onde a escolha é registrada. Fica vazio até a primeira cotação. -->
           <div id="escolha-area"></div>
 
@@ -2389,6 +2393,12 @@
       document.getElementById('cepDest').value = dados.cep;
       document.getElementById('endDest').value = dados.endereco;
       document.getElementById('cidadeDest').value = dados.cidadeUf;
+      // Guarda o endereço em pedaços. O formulário só tem uma linha de
+      // endereço, mas o cadastro de destinatário da Rodonaves exige rua,
+      // número e bairro separados — e é aqui, e só aqui, que eles existem
+      // separados. Fica amarrado ao CNPJ consultado para não usar o endereço
+      // de um cliente no cadastro de outro.
+      ultimaConsultaCnpj = { ...dados, cnpj };
       lookupStatusCnpj.textContent = `✓ Dados oficiais encontrados (situação: ${dados.situacao || 'não informada'}) — revise antes de cotar.`;
       lookupStatusCnpj.className = 'lookup-status ok';
     } catch (err) {
@@ -2629,7 +2639,7 @@
       return estados
         .map((e, i) => ({ e, c: chamadas[i] }))
         .filter((x) => x.e.status === 'erro')
-        .map((x) => ({ transportadora: x.c.transportadora, modal: x.c.modal, mensagem: x.e.mensagem, jaPintada: x.e.pintada === true }));
+        .map((x) => ({ transportadora: x.c.transportadora, modal: x.c.modal, mensagem: x.e.mensagem, jaPintada: x.e.pintada === true, indice: chamadas.indexOf(x.c) }));
     }
 
     function pintar(finalizado) {
@@ -2709,6 +2719,9 @@
         <div>
           <div class="carrier-name">${escapeHtml(e.transportadora.nome)}</div>
           <div class="carrier-sub" style="color:#c0392b;">Erro: ${escapeHtml(e.mensagem)}</div>
+          ${finalizado && pedeCadastroDeCliente(e.mensagem)
+            ? `<button type="button" class="secondary btn-cadastrar-dest" data-indice="${e.indice}" style="margin-top:6px;">Cadastrar destinatário na ${escapeHtml(e.transportadora.nome)}</button>`
+            : ''}
         </div>
         <div class="prazo">—</div>
         <div class="price">—</div>
@@ -2732,6 +2745,32 @@
     // Só entram no lote as que não foram bloqueadas por regra.
     const indicesConsultados = chamadas.map((c, i) => (c.bloqueio ? -1 : i)).filter((i) => i >= 0);
     const consultadas = indicesConsultados.length;
+
+    // Guarda o estado desta rodada para que uma transportadora sozinha possa
+    // ser consultada de novo sem refazer a cotação inteira — é o que acontece
+    // depois de cadastrar o destinatário na Rodonaves.
+    rodadaAtual = {
+      dados,
+      chamadas,
+      refazer: async (i) => {
+        const c = chamadas[i];
+        estados[i] = { status: 'pendente' };
+        pintar(false);
+        try {
+          const r = await c.transportadora.cotar(dados, c.modal);
+          estados[i] = { status: 'ok', resposta: r };
+        } catch (err) {
+          estados[i] = { status: 'erro', mensagem: (err && err.message) || 'Erro desconhecido' };
+        }
+        pintar(true);
+        const rs = respostasOrdenadas();
+        statusLine.textContent = `${rs.length} resposta(s) após nova tentativa da ${escapeHtml(c.transportadora.nome)}.`;
+        // A lista mudou de tamanho e de ordem: o estado da escolha precisa
+        // acompanhar, senão o índice guardado aponta para outra linha.
+        estadoCotacao.respostas = rs;
+        montarEscolha();
+      },
+    };
 
     pintar(false);
 
@@ -2963,6 +3002,131 @@
     });
     sincronizar();
   })();
+
+  // ============ Cadastro do destinatário na transportadora ============
+  // A maior causa viva de falha da Rodonaves (7 ocorrências, a última em
+  // 23/09) não é rota nem token: é o destinatário não existir na base deles.
+  // A doc da Rodonaves tem o endpoint para cadastrar, e é o que este bloco
+  // usa — depois da confirmação do operador, nunca sozinho.
+  //
+  // O motivo de exigir confirmação não é técnico: esta chamada ESCREVE no TMS
+  // da transportadora, com endereço que vem da Receita Federal e nem sempre é
+  // o endereço real de entrega. Endereço errado gravado lá pode virar entrega
+  // no lugar errado. Por isso a tela mostra cada campo, deixa corrigir, e só
+  // então envia.
+  let ultimaConsultaCnpj = null;
+  let rodadaAtual = null;
+  const areaCadastroDest = document.getElementById('cadastro-rodonaves-area');
+
+  function pedeCadastroDeCliente(msg) {
+    return /destinat[áa]rio n[ãa]o encontrado|cliente n[ãa]o (encontrado|cadastrado)/i.test(String(msg || ''));
+  }
+
+  const CAMPOS_CADASTRO = [
+    { id: 'razaoSocial', rotulo: 'Razão social', obrigatorio: true },
+    { id: 'cnpj', rotulo: 'CNPJ', obrigatorio: true },
+    { id: 'email', rotulo: 'E-mail', obrigatorio: true },
+    { id: 'telefone', rotulo: 'Telefone', obrigatorio: true },
+    { id: 'cep', rotulo: 'CEP', obrigatorio: true },
+    { id: 'logradouro', rotulo: 'Rua', obrigatorio: true },
+    { id: 'numero', rotulo: 'Número', obrigatorio: true },
+    { id: 'complemento', rotulo: 'Complemento', obrigatorio: false },
+    { id: 'bairro', rotulo: 'Bairro', obrigatorio: true },
+    { id: 'cidade', rotulo: 'Cidade', obrigatorio: true },
+    { id: 'uf', rotulo: 'UF', obrigatorio: true },
+  ];
+
+  function abrirCadastroDestinatario(indice) {
+    const chamada = rodadaAtual && rodadaAtual.chamadas[indice];
+    if (!chamada) return;
+
+    const cnpjForm = document.getElementById('cnpjDest').value.replace(/\D/g, '');
+    // Só aproveita a consulta de CNPJ se for do MESMO CNPJ desta cotação —
+    // senão o operador cadastraria um cliente com o endereço de outro.
+    const c = (ultimaConsultaCnpj && ultimaConsultaCnpj.cnpj === cnpjForm) ? ultimaConsultaCnpj : {};
+    const cidadeUf = partirCidadeUf(document.getElementById('cidadeDest').value);
+
+    const valores = {
+      razaoSocial: document.getElementById('razaoSocial').value || c.razaoSocial || '',
+      cnpj: cnpjForm,
+      email: c.email || '',
+      telefone: c.telefone || '',
+      cep: (document.getElementById('cepDest').value || c.cep || '').replace(/\D/g, ''),
+      logradouro: c.logradouro || '',
+      numero: c.numero || '',
+      complemento: c.complemento || '',
+      bairro: c.bairro || '',
+      cidade: c.cidade || (cidadeUf ? cidadeUf.exibicao.replace(/\s*[-–\/]\s*[A-Za-zÀ-ÿ]{2}$/, '') : ''),
+      uf: c.uf || (cidadeUf ? cidadeUf.uf : ''),
+    };
+
+    const faltando = CAMPOS_CADASTRO.filter((f) => f.obrigatorio && !valores[f.id]).map((f) => f.rotulo);
+
+    areaCadastroDest.innerHTML = `
+      <div class="notice" style="margin-top:12px;">
+        <strong>Cadastrar ${escapeHtml(chamada.transportadora.nome)} — confira antes de enviar</strong>
+        Isto <strong>grava um cliente no sistema da ${escapeHtml(chamada.transportadora.nome)}</strong>, não é consulta. O endereço abaixo veio da Receita Federal e pode não ser o endereço real de entrega — corrija o que estiver errado antes de confirmar.
+        ${faltando.length ? `<br><span style="color:#c0392b;">Faltam: ${escapeHtml(faltando.join(', '))}. Busque o CNPJ ou preencha à mão.</span>` : ''}
+        <div class="grid cols-3" style="margin-top:10px;">
+          ${CAMPOS_CADASTRO.map((f) => `
+            <div class="field">
+              <label>${escapeHtml(f.rotulo)}${f.obrigatorio ? '' : ' (opcional)'}</label>
+              <input type="text" class="cad-campo" data-campo="${f.id}" value="${escapeHtml(valores[f.id])}">
+            </div>`).join('')}
+        </div>
+        <div class="cta-row" style="margin-top:10px;">
+          <button type="button" class="primary" id="btn-confirmar-cadastro" data-indice="${indice}">Cadastrar e cotar de novo</button>
+          <button type="button" class="secondary" id="btn-cancelar-cadastro">Cancelar</button>
+        </div>
+        <div id="cadastro-status" class="lookup-status" style="margin-top:8px;"></div>
+      </div>
+    `;
+    areaCadastroDest.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  listaResultados.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.btn-cadastrar-dest');
+    if (!btn) return;
+    abrirCadastroDestinatario(Number(btn.dataset.indice));
+  });
+
+  areaCadastroDest.addEventListener('click', async (ev) => {
+    if (ev.target.closest('#btn-cancelar-cadastro')) {
+      areaCadastroDest.innerHTML = '';
+      return;
+    }
+    const btn = ev.target.closest('#btn-confirmar-cadastro');
+    if (!btn) return;
+
+    const indice = Number(btn.dataset.indice);
+    const corpo = {};
+    areaCadastroDest.querySelectorAll('.cad-campo').forEach((input) => {
+      corpo[input.dataset.campo] = input.value.trim();
+    });
+
+    const status = document.getElementById('cadastro-status');
+    btn.disabled = true;
+    status.style.color = '';
+    status.textContent = 'Cadastrando…';
+
+    try {
+      const resp = await fetch('/api/rodonaves-cadastrar-cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify(corpo),
+      });
+      const json = await resp.json();
+      if (!resp.ok || json.erro) throw new Error(json.mensagem || 'Não foi possível cadastrar.');
+
+      status.textContent = '✓ Destinatário cadastrado. Consultando de novo…';
+      areaCadastroDest.innerHTML = '';
+      if (rodadaAtual) await rodadaAtual.refazer(indice);
+    } catch (err) {
+      btn.disabled = false;
+      status.textContent = `Erro: ${err.message}`;
+      status.style.color = '#c0392b';
+    }
+  });
 
   // ================= Ponto de entrada =================
   // Sem tela de entrada nem login: o motor já é a única coisa que existe na

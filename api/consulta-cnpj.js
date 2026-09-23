@@ -61,6 +61,25 @@ module.exports = async (req, res) => {
       endereco: enderecoTexto,
       cidadeUf: endereco.city ? `${endereco.city} - ${endereco.state || ''}`.trim() : '',
       situacao: json.status?.text || '',
+
+      // ===== Endereço em pedaços (24/09/2026) =====
+      // O campo "endereco" acima junta rua, número e bairro numa string só,
+      // que serve para preencher o formulário e não serve para mais nada. O
+      // cadastro de destinatário da Rodonaves (savecustomer) exige os três
+      // separados — e a CNPJá já devolve assim. Era informação que a gente
+      // recebia e jogava fora.
+      //
+      // Email e telefone vêm com `|| null` de propósito: não deu para
+      // confirmar se o plano aberto da CNPJá devolve esses campos, então
+      // quem consome trata a ausência em vez de assumir que vêm.
+      logradouro: endereco.street || '',
+      numero: endereco.number ? String(endereco.number) : '',
+      complemento: endereco.details || '',
+      bairro: endereco.district || '',
+      cidade: endereco.city || '',
+      uf: endereco.state || '',
+      email: json.emails?.[0]?.address || null,
+      telefone: json.phones?.[0] ? `${json.phones[0].area || ''}${json.phones[0].number || ''}` : null,
     });
   } catch (err) {
     res.status(200).json({ erro: true, mensagem: err.message || 'Erro ao consultar o CNPJ' });
