@@ -635,6 +635,32 @@
   }
   .hist-msg-n { color: var(--erro); font-weight: 800; text-align: right; }
   .hist-msg-txt { color: var(--muted); word-break: break-word; }
+
+  /* ===== Cobertura ===== */
+  .cob-linha {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--s-3);
+    align-items: center;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .cob-linha:first-child { border-top: none; }
+  .cob-linha .muted { color: var(--muted); font-size: 12px; }
+  .cob-linha button { white-space: nowrap; }
+  @media (max-width: 720px) {
+    .cob-linha { grid-template-columns: 1fr; }
+  }
+  /* Transportadora que nem chegou a ser consultada. Fica visível de
+     propósito: regra errada precisa poder ser percebida, senão bloquear vira
+     esconder. */
+  .carrier-row.fora-cobertura { opacity: 0.5; }
+  .carrier-row.fora-cobertura .logo-dot {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+  }
   /* A data da última ocorrência fica presa ao texto da mensagem, não numa
      coluna própria: ela é ressalva sobre aquela mensagem, não um dado a
      comparar linha a linha. */
@@ -963,6 +989,10 @@
       <button type="button" class="sidebar-item" data-view="caixas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>
         Cadastro de caixas
+      </button>
+      <button type="button" class="sidebar-item" data-view="cobertura">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path></svg>
+        Cobertura
       </button>
       <button type="button" class="sidebar-item" data-view="historico">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
@@ -1308,6 +1338,54 @@
       </div>
     </div>
 
+    <!-- ===== Tela: Cobertura por transportadora =====
+         Cada regra aqui é uma chamada que deixa de ser feita. Existe porque a
+         transportadora já disse, com essas palavras, que não atende aquele
+         destino — e repetir a pergunta custa os 20s de timeout do operador
+         para receber a mesma recusa. -->
+    <div id="view-cobertura" class="app-view" hidden>
+      <div class="wrap">
+        <h1>Cobertura por transportadora</h1>
+        <p class="subtitle">Destinos que uma transportadora já recusou. Nesses casos o motor deixa de consultá-la, em vez de esperar a recusa chegar.</p>
+
+        <div class="panel" id="painel-cobertura-status"></div>
+
+        <div class="panel">
+          <h2>Recusas já medidas</h2>
+          <p class="arch-note" style="margin-top:0;">Tiradas do histórico, do texto que a própria transportadora devolveu. Só entram recusas que falam de <strong>cidade ou região</strong> — "cliente não encontrado" e CEP inválido ficam de fora de propósito: esses não são cobertura, e virar regra aqui esconderia o problema real.</p>
+          <div id="lista-sugestoes-cobertura"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Regras ativas</h2>
+          <div id="lista-cobertura"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Acrescentar à mão</h2>
+          <form id="form-cobertura">
+            <div class="grid cols-3">
+              <div class="field">
+                <label>Transportadora</label>
+                <select id="cobTransportadora"></select>
+              </div>
+              <div class="field">
+                <label>Cidade</label>
+                <input type="text" id="cobCidade" placeholder="Ex.: Mombaça" required>
+              </div>
+              <div class="field">
+                <label>UF</label>
+                <input type="text" id="cobUf" placeholder="CE" maxlength="2" required>
+              </div>
+            </div>
+            <div class="cta-row" style="margin-top: 4px;">
+              <button type="submit" class="primary">Não cotar nesse destino</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Tela: Histórico de cotações ===== -->
     <div id="view-historico" class="app-view" hidden>
       <div class="wrap">
@@ -1444,6 +1522,7 @@
       document.querySelectorAll('.app-view').forEach((v) => { v.hidden = true; });
       document.getElementById(`view-${btn.dataset.view}`).hidden = false;
       if (btn.dataset.view === 'historico') carregarHistorico();
+      if (btn.dataset.view === 'cobertura') carregarTelaCobertura();
     });
   });
 
@@ -1552,6 +1631,225 @@
     } finally {
       btn.disabled = false;
       btn.textContent = 'Rastrear';
+    }
+  });
+
+  // ================= Cobertura por transportadora =================
+  // Regra por CIDADE, nunca por estado. Mombaça e Iguatu são as duas no
+  // Ceará e Fortaleza certamente é atendida — bloquear o CE inteiro jogaria
+  // fora o que funciona. Goiânia é a prova medida: a Rodonaves respondeu e
+  // ganhou no preço numa cotação (23/09) e falhou em outra (21/09), por um
+  // motivo que não era cobertura.
+  const REGRAS_COBERTURA = { lista: [], persistente: false };
+
+  // Precisa bater com normalizarCidade() de api/cobertura.js. Se uma mudar
+  // sem a outra, a regra para de casar e ninguém percebe.
+  function normalizarCidade(txt) {
+    return String(txt || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
+  // O campo de destino é texto livre no formato "Cidade - UF". Sem os dois
+  // pedaços não dá para casar regra nenhuma, e aí o certo é consultar todo
+  // mundo: deixar de cotar por causa de um campo mal preenchido seria pior
+  // que a espera que a regra evita.
+  function partirCidadeUf(txt) {
+    const bruto = String(txt || '').trim();
+    const m = bruto.match(/^(.+?)\s*[-–\/]\s*([A-Za-zÀ-ÿ]{2})$/);
+    if (!m) return null;
+    return { cidade: normalizarCidade(m[1]), uf: m[2].toUpperCase(), exibicao: bruto };
+  }
+
+  function regraQueBloqueia(nomeTransportadora, destino) {
+    if (!destino) return null;
+    return REGRAS_COBERTURA.lista.find((r) =>
+      r.transportadora === nomeTransportadora && r.cidade === destino.cidade && r.uf === destino.uf) || null;
+  }
+
+  // Só estas frases viram sugestão de regra. A lista é curta de propósito:
+  // "Cliente destinatário não encontrado" (7 ocorrências, a maior causa viva
+  // da Rodonaves) NÃO entra, porque é problema de cadastro do destinatário e
+  // não do trecho — virar regra aqui faria a transportadora sumir da tela
+  // parecendo resolvido. "Não localizado CEP" também fica fora: é ambíguo,
+  // pode ser CEP errado nosso.
+  const PADROES_COBERTURA = [
+    /n[ãa]o\s+localizada\s+uma\s+unidade\s+que\s+atenda/i,
+    /regi[ãa]o\s+n[ãa]o\s+atendida/i,
+    /localidade\s+n[ãa]o\s+atendida/i,
+    /n[ãa]o\s+atendemos\s+(essa|esta)\s+(cidade|regi[ãa]o|localidade)/i,
+  ];
+
+  function pareceRecusaDeCobertura(msg) {
+    return PADROES_COBERTURA.some((re) => re.test(String(msg || '')));
+  }
+
+  async function carregarCobertura() {
+    try {
+      const resp = await fetch('/api/cobertura', { headers: { 'Cache-Control': 'no-store' } });
+      const dados = await resp.json();
+      REGRAS_COBERTURA.lista = Array.isArray(dados.regras) ? dados.regras : [];
+      REGRAS_COBERTURA.persistente = Boolean(dados.persistente);
+    } catch {
+      // Falhar aqui não pode travar a cotação: sem regras, consulta todo mundo.
+      REGRAS_COBERTURA.lista = [];
+      REGRAS_COBERTURA.persistente = false;
+    }
+  }
+
+  async function salvarRegraCobertura(regra) {
+    const resp = await fetch('/api/cobertura', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+      body: JSON.stringify(regra),
+    });
+    const json = await resp.json();
+    if (!resp.ok || json.erro) throw new Error(json.mensagem || 'Não foi possível salvar a regra.');
+    await carregarCobertura();
+  }
+
+  // Sugestões: transportadora × cidade que já recusou por cobertura, tiradas
+  // do histórico que a tela de Cobertura busca sozinha.
+  function sugestoesDeCobertura(historico) {
+    const mapa = new Map();
+    historico.forEach((h) => {
+      const destino = partirCidadeUf(h.cidadeDest);
+      if (!destino) return;
+      (h.erros || []).forEach((e) => {
+        if (!e || !e.transportadora || !pareceRecusaDeCobertura(e.mensagem)) return;
+        const chave = `${e.transportadora}|${destino.cidade}|${destino.uf}`;
+        if (!mapa.has(chave)) {
+          mapa.set(chave, {
+            transportadora: e.transportadora,
+            cidade: destino.cidade,
+            uf: destino.uf,
+            cidadeExibicao: destino.exibicao.replace(/\s*[-–\/]\s*[A-Za-zÀ-ÿ]{2}$/, ''),
+            motivo: e.mensagem,
+            n: 0,
+            ultima: null,
+          });
+        }
+        const s = mapa.get(chave);
+        s.n++;
+        const quando = new Date(h.dataHora);
+        if (!isNaN(quando) && (!s.ultima || quando > s.ultima)) s.ultima = quando;
+      });
+    });
+    return [...mapa.values()]
+      .filter((s) => !regraQueBloqueia(s.transportadora, s))
+      .sort((a, b) => b.n - a.n);
+  }
+
+  async function carregarTelaCobertura() {
+    const painel = document.getElementById('painel-cobertura-status');
+    const lista = document.getElementById('lista-cobertura');
+    const sugs = document.getElementById('lista-sugestoes-cobertura');
+    painel.innerHTML = '<p class="arch-note" style="margin:0;">Carregando…</p>';
+
+    await carregarCobertura();
+
+    painel.innerHTML = REGRAS_COBERTURA.persistente
+      ? '<p class="arch-note" style="margin:0;">✅ Regras guardadas no banco (Postgres) — valem para todo mundo que usa o motor.</p>'
+      : '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ Sem banco conectado: nenhuma regra é aplicada e a cotação continua consultando todas as transportadoras. Isso é o comportamento seguro — perder uma regra atrasa, bloquear por engano esconde.</p>';
+
+    // Seletor de transportadora do formulário manual.
+    const sel = document.getElementById('cobTransportadora');
+    if (sel && !sel.options.length) {
+      sel.innerHTML = TRANSPORTADORAS.map((t) => `<option value="${escapeHtml(t.nome)}">${escapeHtml(t.nome)}</option>`).join('');
+    }
+
+    lista.innerHTML = REGRAS_COBERTURA.lista.length
+      ? `<div class="historico-table">${REGRAS_COBERTURA.lista.map((r) => `
+          <div class="cob-linha">
+            <span><strong>${escapeHtml(r.transportadora)}</strong> não cota para <strong>${escapeHtml(r.cidadeExibicao)}/${escapeHtml(r.uf)}</strong>
+              ${r.motivo ? `<br><span class="muted">${escapeHtml(r.motivo.slice(0, 160))}</span>` : ''}</span>
+            <button type="button" class="secondary cob-remover" data-id="${r.id}">Voltar a cotar</button>
+          </div>`).join('')}</div>`
+      : '<p class="arch-note" style="margin:0;">Nenhuma regra ainda — o motor consulta todas as transportadoras em todo destino.</p>';
+
+    sugs.innerHTML = '<p class="arch-note" style="margin:0;">Lendo o histórico…</p>';
+    try {
+      const resp = await fetch('/api/historico-cotacoes', { headers: { 'Cache-Control': 'no-store' } });
+      const dados = await resp.json();
+      const lst = sugestoesDeCobertura(Array.isArray(dados.historico) ? dados.historico : []);
+      sugs.innerHTML = lst.length
+        ? `<div class="historico-table">${lst.map((s) => `
+            <div class="cob-linha">
+              <span><strong>${escapeHtml(s.transportadora)}</strong> recusou <strong>${escapeHtml(s.cidadeExibicao)}/${escapeHtml(s.uf)}</strong>
+                — ${s.n}${s.n === 1 ? ' vez' : ' vezes'}${s.ultima ? `, última em ${s.ultima.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : ''}
+                <br><span class="muted">${escapeHtml(s.motivo.slice(0, 200))}</span></span>
+              <button type="button" class="primary cob-aceitar"
+                data-transportadora="${escapeHtml(s.transportadora)}"
+                data-cidade="${escapeHtml(s.cidadeExibicao)}"
+                data-uf="${escapeHtml(s.uf)}"
+                data-motivo="${escapeHtml(s.motivo.slice(0, 300))}">Parar de cotar</button>
+            </div>`).join('')}</div>`
+        : '<p class="arch-note" style="margin:0;">Nenhuma recusa de cobertura pendente no histórico.</p>';
+    } catch {
+      sugs.innerHTML = '<p class="arch-note" style="margin:0; color:#c0392b;">⚠ Não foi possível ler o histórico agora.</p>';
+    }
+  }
+
+  document.getElementById('lista-sugestoes-cobertura').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.cob-aceitar');
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      await salvarRegraCobertura({
+        transportadora: btn.dataset.transportadora,
+        cidade: btn.dataset.cidade,
+        uf: btn.dataset.uf,
+        cidadeExibicao: btn.dataset.cidade,
+        motivo: btn.dataset.motivo,
+        origem: 'medida',
+      });
+      await carregarTelaCobertura();
+    } catch (err) {
+      btn.disabled = false;
+      alert(err.message);
+    }
+  });
+
+  document.getElementById('lista-cobertura').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.cob-remover');
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      const resp = await fetch('/api/cobertura', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify({ acao: 'remover', id: Number(btn.dataset.id) }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || json.erro) throw new Error(json.mensagem || 'Não foi possível remover.');
+      await carregarTelaCobertura();
+    } catch (err) {
+      btn.disabled = false;
+      alert(err.message);
+    }
+  });
+
+  document.getElementById('form-cobertura').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const cidade = document.getElementById('cobCidade').value.trim();
+    const uf = document.getElementById('cobUf').value.trim();
+    try {
+      await salvarRegraCobertura({
+        transportadora: document.getElementById('cobTransportadora').value,
+        cidade,
+        uf,
+        cidadeExibicao: cidade,
+        motivo: 'Cadastrada à mão',
+        origem: 'manual',
+      });
+      document.getElementById('cobCidade').value = '';
+      document.getElementById('cobUf').value = '';
+      await carregarTelaCobertura();
+    } catch (err) {
+      alert(err.message);
     }
   });
 
@@ -2289,10 +2587,14 @@
 
     // Monta a lista de chamadas: uma por transportadora × modal que ela atende
     // e que foi pedido — isto é o "lote paralelo" que dispara de uma vez.
+    // Regra de cobertura: se a transportadora já recusou este destino, a
+    // chamada nem sai. Destino ilegível (campo fora do formato "Cidade - UF")
+    // resulta em destino nulo, e aí ninguém é bloqueado — na dúvida, cota.
+    const destinoCotacao = partirCidadeUf(document.getElementById('cidadeDest').value);
     const chamadas = [];
     TRANSPORTADORAS.forEach((t) => {
       t.modais.filter((m) => modaisPedidos.includes(m)).forEach((modal) => {
-        chamadas.push({ transportadora: t, modal });
+        chamadas.push({ transportadora: t, modal, bloqueio: regraQueBloqueia(t.nome, destinoCotacao) });
       });
     });
 
@@ -2312,7 +2614,7 @@
     //
     // Agora cada chamada tem uma linha própria desde o início e a preenche
     // quando volta. `estados[i]` acompanha a chamada de mesmo índice.
-    const estados = chamadas.map(() => ({ status: 'pendente' }));
+    const estados = chamadas.map((c) => (c.bloqueio ? { status: 'fora', pintada: true } : { status: 'pendente' }));
     const inicio = performance.now();
 
     function respostasOrdenadas() {
@@ -2383,6 +2685,24 @@
         <div class="status-dot-row status-padrao"><span class="status-dot"></span>Aguardando</div>
       </div>`).join('');
 
+      // Quem não foi consultada por regra de cobertura. Aparece na lista de
+      // propósito, e no fim — se a regra estiver errada, o operador precisa
+      // conseguir ver que faltou alguém, senão bloquear vira esconder.
+      const linhasFora = estados
+        .map((e, i) => ({ e, c: chamadas[i] }))
+        .filter((x) => x.e.status === 'fora')
+        .map((x) => `
+      <div class="carrier-row fora-cobertura">
+        <div class="logo-dot">${x.c.transportadora.sigla}</div>
+        <div>
+          <div class="carrier-name">${escapeHtml(x.c.transportadora.nome)}</div>
+          <div class="carrier-sub">Não consultada — regra de cobertura para ${escapeHtml(x.c.bloqueio.cidadeExibicao)}/${escapeHtml(x.c.bloqueio.uf)}</div>
+        </div>
+        <div class="prazo">—</div>
+        <div class="price">—</div>
+        <div class="status-dot-row status-padrao"><span class="status-dot"></span>Fora de cobertura</div>
+      </div>`).join('');
+
       const linhasErro = erros.map((e) => `
       <div class="carrier-row${e.jaPintada ? '' : ' fade-in'}">
         <div class="logo-dot">⚠</div>
@@ -2395,29 +2715,37 @@
         <div class="status-dot-row status-erro"><span class="status-dot"></span>Erro</div>
       </div>`).join('');
 
-      listaResultados.innerHTML = linhasOk + linhasPendentes + linhasErro;
+      listaResultados.innerHTML = linhasOk + linhasPendentes + linhasErro + linhasFora;
 
       // Quem já apareceu não anima de novo na próxima chegada.
       estados.forEach((e) => { if (e.status !== 'pendente') e.pintada = true; });
 
       if (!finalizado) {
         const respondidas = respostas.length + erros.length;
-        statusLine.textContent = `${respondidas} de ${chamadas.length} responderam — aguardando ${pendentes.length}…`;
+        // O denominador conta só quem foi realmente consultada: incluir as
+        // bloqueadas daria a impressão de que ainda falta resposta de quem
+        // nunca foi perguntada.
+        statusLine.textContent = `${respondidas} de ${consultadas} responderam — aguardando ${pendentes.length}…`;
       }
     }
+
+    // Só entram no lote as que não foram bloqueadas por regra.
+    const indicesConsultados = chamadas.map((c, i) => (c.bloqueio ? -1 : i)).filter((i) => i >= 0);
+    const consultadas = indicesConsultados.length;
 
     pintar(false);
 
     // Cada chamada resolve a sua própria linha. O .catch() por chamada faz o
     // papel que o allSettled fazia antes: uma transportadora com erro não
     // derruba as respostas das outras.
-    let faltam = chamadas.length;
-    await Promise.all(chamadas.map((c, i) =>
-      c.transportadora.cotar(dados, c.modal)
+    let faltam = consultadas;
+    await Promise.all(indicesConsultados.map((i) => {
+      const c = chamadas[i];
+      return c.transportadora.cotar(dados, c.modal)
         .then((r) => { estados[i] = { status: 'ok', resposta: r }; })
         .catch((err) => { estados[i] = { status: 'erro', mensagem: (err && err.message) || 'Erro desconhecido' }; })
-        .then(() => { faltam--; if (faltam > 0) pintar(false); })
-    ));
+        .then(() => { faltam--; if (faltam > 0) pintar(false); });
+    }));
 
     const duracao = ((performance.now() - inicio) / 1000).toFixed(1);
     const respostas = respostasOrdenadas();
@@ -2425,7 +2753,8 @@
 
     pintar(true);
 
-    statusLine.textContent = `${respostas.length} resposta(s) recebida(s) em ${duracao}s${erros.length ? `, ${erros.length} com erro` : ''} (tempo da mais lenta, não a soma de todas).`;
+    const puladas = chamadas.length - consultadas;
+    statusLine.textContent = `${respostas.length} resposta(s) recebida(s) em ${duracao}s${erros.length ? `, ${erros.length} com erro` : ''}${puladas ? `, ${puladas} não consultada(s) por regra de cobertura` : ''} (tempo da mais lenta, não a soma de todas).`;
 
     // ================= Histórico de cotações (log de apoio) =================
     // Dispara depois que a cotação já terminou e já apareceu na tela — se essa
@@ -2639,6 +2968,10 @@
   // Sem tela de entrada nem login: o motor já é a única coisa que existe na
   // página, então só falta carregar a lista de caixas assim que a página abre.
   carregarCaixas();
+  // As regras de cobertura precisam estar em memória antes da primeira
+  // cotação. Se esta chamada falhar ou demorar, nenhuma regra é aplicada e o
+  // motor consulta todo mundo — que é o comportamento de antes, e o seguro.
+  carregarCobertura();
 </script>
 </body>
 </html>
