@@ -661,6 +661,10 @@
     border: 1px dashed var(--border);
     color: var(--muted);
   }
+  /* Na faixa lateral estreita o botão de cadastrar destinatário empurrava o
+     selo "Erro" para fora da linha. Ocupando a largura da célula, ele desce
+     em vez de empurrar. */
+  .cotacao-rail .btn-cadastrar-dest { width: 100%; }
   /* A data da última ocorrência fica presa ao texto da mensagem, não numa
      coluna própria: ela é ressalva sobre aquela mensagem, não um dado a
      comparar linha a linha. */
