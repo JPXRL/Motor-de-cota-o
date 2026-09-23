@@ -1582,11 +1582,12 @@
     statusLine.textContent = '';
 
     try {
-      const endpoint = transportadora === 'jamef' ? '/api/jamef-rastrear' : '/api/braspress-rastrear';
-      const resp = await fetch(endpoint, {
+      // Uma porta só para o rastreio de todas as transportadoras — ver o
+      // comentário em api/rastrear.js sobre o limite de funções da Vercel.
+      const resp = await fetch('/api/rastrear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
-        body: JSON.stringify({ tipoBusca, numero, serie }),
+        body: JSON.stringify({ transportadora, tipoBusca, numero, serie }),
       });
       const dados = await resp.json();
 
@@ -3122,10 +3123,10 @@
     status.textContent = 'Cadastrando…';
 
     try {
-      const resp = await fetch('/api/rodonaves-cadastrar-cliente', {
+      const resp = await fetch('/api/rodonaves-cotar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
-        body: JSON.stringify(corpo),
+        body: JSON.stringify({ ...corpo, acao: 'cadastrar-cliente' }),
       });
       const json = await resp.json();
       if (!resp.ok || json.erro) throw new Error(json.mensagem || 'Não foi possível cadastrar.');

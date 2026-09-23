@@ -34,6 +34,15 @@ const DOMINIO_COTACAO = 'https://quotation-apigateway.rte.com.br';
 const DOMINIO_CIDADE = 'https://dne-api.rte.com.br';
 const DOMINIO_PRAZO = 'https://01wapi.rte.com.br';
 
+// O cadastro de destinatário na Rodonaves entra por AQUI, com
+// acao: 'cadastrar-cliente' — não por um endpoint próprio. Motivo: o plano
+// Hobby da Vercel conta no máximo 12 funções serverless por deploy (o
+// middleware inclusive), e passar disso derrubou quatro deploys seguidos em
+// 23/09/2026 sem que o site desse qualquer sinal — ele continuou servindo a
+// versão antiga. A pasta api/ virou o orçamento de funções; a lógica mora em
+// lib/, que é empacotado junto sem contar.
+const cadastrarClienteRodonaves = require('../lib/rodonaves-cadastrar-cliente');
+
 // Cada domínio exige seu próprio login — um cache de token por domínio.
 const tokenCachePorDominio = new Map();
 
@@ -168,6 +177,12 @@ module.exports = async (req, res) => {
   if (req.headers['x-requested-with'] !== 'motor-rareway') {
     res.status(403).json({ erro: true, mensagem: 'Requisição não autorizada.' });
     return;
+  }
+
+  // Cadastro do destinatário: mesma porta, ação diferente. Fica antes de
+  // tudo para não passar pela validação de cotação, que pede outros campos.
+  if ((req.body || {}).acao === 'cadastrar-cliente') {
+    return cadastrarClienteRodonaves(req, res);
   }
 
   try {
