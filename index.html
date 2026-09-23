@@ -405,6 +405,17 @@
     animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Linha de transportadora que ainda não respondeu. Fica na mesma grade das
+     outras (e não numa lista separada) para que a chegada da resposta seja
+     uma troca de conteúdo no lugar onde o olho já está, não um salto. */
+  .carrier-row.aguardando { opacity: 0.55; }
+  .carrier-row.aguardando .logo-dot {
+    background: transparent;
+    border: 1px dashed var(--border);
+  }
+  .carrier-row.aguardando .logo-dot .spinner { width: 14px; height: 14px; }
+
   .fade-in { animation: fadeIn 0.25s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
 
@@ -2268,35 +2279,67 @@
     const textoOriginalBotao = btnCotar.textContent;
     btnCotar.disabled = true;
     btnCotar.textContent = 'Consultando…';
-    statusLine.textContent = `Consultando ${chamadas.length} cotações em paralelo…`;
     resultadosPanel.style.display = 'block';
-    listaResultados.innerHTML = chamadas.map((c) => `
-      <div class="loading-row"><div class="spinner"></div> ${c.transportadora.nome} (${c.modal === 'aereo' ? 'aéreo' : 'rodoviário'})</div>
-    `).join('');
     resultadosPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
+    // ===================== Resultados progressivos =====================
+    // Antes a tela esperava TODAS as transportadoras e desenhava tudo junto no
+    // fim. Na prática o operador esperava sempre pela mais lenta — inclusive
+    // quando a mais lenta ia estourar os 20s de timeout e não trazer nada.
+    // Medido no histórico: 68% das cotações têm alguma falha, e "não respondeu
+    // em 20s" é a maior categoria isolada. Esperar por quem não vem era o
+    // comportamento padrão.
+    //
+    // Agora cada chamada tem uma linha própria desde o início e a preenche
+    // quando volta. `estados[i]` acompanha a chamada de mesmo índice.
+    const estados = chamadas.map(() => ({ status: 'pendente' }));
     const inicio = performance.now();
 
-    // Todas as chamadas acontecem ao mesmo tempo. Usa allSettled (não all)
-    // pra uma transportadora com erro não derrubar as respostas das outras.
-    const settled = await Promise.allSettled(
-      chamadas.map((c) => c.transportadora.cotar(dados, c.modal).then((r) => ({ ...r, transportadora: c.transportadora, modal: c.modal })))
-    );
+    function respostasOrdenadas() {
+      return estados
+        .map((e, i) => ({ e, c: chamadas[i] }))
+        .filter((x) => x.e.status === 'ok')
+        .map((x) => ({ ...x.e.resposta, transportadora: x.c.transportadora, modal: x.c.modal, jaPintada: x.e.pintada === true }))
+        .sort((a, b) => a.valor - b.valor);
+    }
 
-    const duracao = ((performance.now() - inicio) / 1000).toFixed(1);
+    function errosAtuais() {
+      return estados
+        .map((e, i) => ({ e, c: chamadas[i] }))
+        .filter((x) => x.e.status === 'erro')
+        .map((x) => ({ transportadora: x.c.transportadora, modal: x.c.modal, mensagem: x.e.mensagem, jaPintada: x.e.pintada === true }));
+    }
 
-    const respostas = settled.filter((s) => s.status === 'fulfilled').map((s) => s.value);
-    const erros = settled
-      .map((s, i) => ({ s, chamada: chamadas[i] }))
-      .filter((x) => x.s.status === 'rejected')
-      .map((x) => ({ transportadora: x.chamada.transportadora, modal: x.chamada.modal, mensagem: x.s.reason?.message || 'Erro desconhecido' }));
+    function pintar(finalizado) {
+      const respostas = respostasOrdenadas();
+      const erros = errosAtuais();
+      const pendentes = estados
+        .map((e, i) => ({ e, c: chamadas[i] }))
+        .filter((x) => x.e.status === 'pendente')
+        .map((x) => x.c);
 
-    statusLine.textContent = `${respostas.length} resposta(s) recebida(s) em ${duracao}s${erros.length ? `, ${erros.length} com erro` : ''} (tempo da mais lenta, não a soma de todas).`;
-
-    respostas.sort((a, b) => a.valor - b.valor);
-
-    listaResultados.innerHTML = respostas.map((r, i) => `
-      <div class="carrier-row clicavel ${i === 0 ? 'best' : ''} fade-in" data-indice="${i}" role="button" tabindex="0" aria-label="Escolher ${escapeHtml(r.transportadora.nome)}">
+      // "Mais barato" e o clique só aparecem quando TODAS responderam.
+      // Coroar um vencedor provisório seria pior do que não coroar nenhum:
+      // convidaria a decidir com o comparativo pela metade, que é exatamente
+      // o erro que este projeto existe para evitar.
+      const linhasOk = respostas.map((r, i) => {
+        const melhor = finalizado && i === 0;
+        // Classes montadas em lista, não concatenadas dentro do atributo: a
+        // primeira versão fechava as aspas no meio para enfiar o data-indice,
+        // e tudo que vinha depois (best, fade-in) virava atributo solto em vez
+        // de classe. A linha mais barata ficava sem destaque e ninguém via,
+        // porque o texto "Mais barato" ao lado continuava certo.
+        const classes = ['carrier-row'];
+        if (finalizado) classes.push('clicavel');
+        if (melhor) classes.push('best');
+        // Só anima quem acabou de chegar — sem isso a lista inteira pisca a
+        // cada resposta nova.
+        if (!r.jaPintada) classes.push('fade-in');
+        const attrs = finalizado
+          ? ` data-indice="${i}" role="button" tabindex="0" aria-label="Escolher ${escapeHtml(r.transportadora.nome)}"`
+          : '';
+        return `
+      <div class="${classes.join(' ')}"${attrs}>
         <div class="logo-dot">${r.transportadora.sigla}</div>
         <div>
           <div class="carrier-name">${r.transportadora.nome}</div>
@@ -2304,20 +2347,65 @@
         </div>
         <div class="prazo">${r.prazoDias} dia${r.prazoDias > 1 ? 's' : ''} úteis</div>
         <div class="price">R$ ${r.valor.toFixed(2).replace('.', ',')}</div>
-        <div class="status-dot-row ${i === 0 ? 'status-best' : 'status-padrao'}"><span class="status-dot"></span>${i === 0 ? 'Mais barato' : 'Padrão'}</div>
-      </div>
-    `).join('') + erros.map((e) => `
-      <div class="carrier-row fade-in">
+        <div class="status-dot-row ${melhor ? 'status-best' : 'status-padrao'}"><span class="status-dot"></span>${finalizado ? (melhor ? 'Mais barato' : 'Padrão') : 'Recebido'}</div>
+      </div>`;
+      }).join('');
+
+      const linhasPendentes = pendentes.map((c) => `
+      <div class="carrier-row aguardando">
+        <div class="logo-dot"><span class="spinner"></span></div>
+        <div>
+          <div class="carrier-name">${escapeHtml(c.transportadora.nome)}</div>
+          <div class="carrier-sub">${c.modal === 'aereo' ? 'Aéreo' : 'Rodoviário'} · consultando…</div>
+        </div>
+        <div class="prazo">—</div>
+        <div class="price">—</div>
+        <div class="status-dot-row status-padrao"><span class="status-dot"></span>Aguardando</div>
+      </div>`).join('');
+
+      const linhasErro = erros.map((e) => `
+      <div class="carrier-row${e.jaPintada ? '' : ' fade-in'}">
         <div class="logo-dot">⚠</div>
         <div>
-          <div class="carrier-name">${e.transportadora.nome}</div>
+          <div class="carrier-name">${escapeHtml(e.transportadora.nome)}</div>
           <div class="carrier-sub" style="color:#c0392b;">Erro: ${escapeHtml(e.mensagem)}</div>
         </div>
         <div class="prazo">—</div>
         <div class="price">—</div>
         <div class="status-dot-row status-erro"><span class="status-dot"></span>Erro</div>
-      </div>
-    `).join('');
+      </div>`).join('');
+
+      listaResultados.innerHTML = linhasOk + linhasPendentes + linhasErro;
+
+      // Quem já apareceu não anima de novo na próxima chegada.
+      estados.forEach((e) => { if (e.status !== 'pendente') e.pintada = true; });
+
+      if (!finalizado) {
+        const respondidas = respostas.length + erros.length;
+        statusLine.textContent = `${respondidas} de ${chamadas.length} responderam — aguardando ${pendentes.length}…`;
+      }
+    }
+
+    pintar(false);
+
+    // Cada chamada resolve a sua própria linha. O .catch() por chamada faz o
+    // papel que o allSettled fazia antes: uma transportadora com erro não
+    // derruba as respostas das outras.
+    let faltam = chamadas.length;
+    await Promise.all(chamadas.map((c, i) =>
+      c.transportadora.cotar(dados, c.modal)
+        .then((r) => { estados[i] = { status: 'ok', resposta: r }; })
+        .catch((err) => { estados[i] = { status: 'erro', mensagem: (err && err.message) || 'Erro desconhecido' }; })
+        .then(() => { faltam--; if (faltam > 0) pintar(false); })
+    ));
+
+    const duracao = ((performance.now() - inicio) / 1000).toFixed(1);
+    const respostas = respostasOrdenadas();
+    const erros = errosAtuais();
+
+    pintar(true);
+
+    statusLine.textContent = `${respostas.length} resposta(s) recebida(s) em ${duracao}s${erros.length ? `, ${erros.length} com erro` : ''} (tempo da mais lenta, não a soma de todas).`;
 
     // ================= Histórico de cotações (log de apoio) =================
     // Dispara depois que a cotação já terminou e já apareceu na tela — se essa
