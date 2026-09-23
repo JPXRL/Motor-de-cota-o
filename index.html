@@ -1724,10 +1724,13 @@
     const corta = (s) => (s.length > 200 ? s.slice(0, 200) + '…' : s);
 
     const blocos = transps.map((t) => {
-      // Teto de 6 por transportadora: a cauda longa não muda a decisão e
-      // transformaria o resumo num log.
-      const mostra = t.grupos.slice(0, 6);
-      const resto = t.grupos.slice(6).reduce((s, g) => s + g.n, 0);
+      // Teto por transportadora, para o resumo não virar log. Era 6 e escondia
+      // 7 das 27 falhas da Rodonaves atrás de "outras mensagens" — um quarto
+      // das falhas da pior transportadora, invisível justo onde a gente estava
+      // procurando. 12 cobre o caso real com folga.
+      const TETO = 12;
+      const mostra = t.grupos.slice(0, TETO);
+      const resto = t.grupos.slice(TETO).reduce((s, g) => s + g.n, 0);
       const linhas = mostra.map((g) => `
         <div class="hist-msg-linha">
           <span class="hist-msg-n">${g.n}×</span>
