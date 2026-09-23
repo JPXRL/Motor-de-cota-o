@@ -1921,7 +1921,15 @@
     const detalhe = nomes.length
       ? `${nomes.length > 1 ? 'falharam' : 'falhou'}: ${escapeHtml(nomes.join(', '))}`
       : `${erros.length} sem resposta`;
-    return `${base}<br><span class="hist-falhou">${detalhe}</span>`;
+    // A mensagem de cada erro no title. O resumo lá em cima agrupa as
+    // mensagens e a linha diz quem falhou, mas ligar as duas coisas exigia
+    // cruzar data e cidade na mão — foi o que eu tive que fazer para responder
+    // "qual cliente deu esse erro?", e a resposta saiu como palpite em vez de
+    // leitura. Passar o mouse na linha agora responde direto.
+    const dica = erros
+      .map((e) => `${(e && e.transportadora) || '?'}: ${(e && e.mensagem) || 'sem mensagem'}`)
+      .join('\n');
+    return `${base}<br><span class="hist-falhou" title="${escapeHtml(dica)}">${detalhe}</span>`;
   }
 
   // Confiabilidade por transportadora, calculada no navegador em cima das
