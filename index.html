@@ -2439,19 +2439,23 @@
   // rodada, sem travar as demais.
   const TIMEOUT_COTACAO_MS = 20000;
 
-  async function cotarViaBackend(endpoint, dados, modal) {
+  // Uma porta só no backend (/api/cotar) para todas as transportadoras, com o
+  // nome indo no corpo. Era um endpoint por transportadora até 24/09/2026;
+  // como o plano Hobby da Vercel só aceita 12 funções serverless, cada
+  // transportadora nova custava uma vaga — e a vaga acabou. Agora custa zero.
+  async function cotarViaBackend(transportadora, dados, modal) {
     const controlador = new AbortController();
     const timer = setTimeout(() => controlador.abort(), TIMEOUT_COTACAO_MS);
     try {
-      const resp = await fetch(endpoint, {
+      const resp = await fetch('/api/cotar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
-        body: JSON.stringify({ ...dados, modal }),
+        body: JSON.stringify({ ...dados, modal, transportadora }),
         signal: controlador.signal,
       });
       const json = await resp.json();
       if (!resp.ok || json.erro) {
-        throw new Error(json.mensagem || `Erro ao consultar ${endpoint}`);
+        throw new Error(json.mensagem || `Erro ao consultar a ${transportadora}`);
       }
       return { valor: json.valor, prazoDias: json.prazoDias, protocolo: json.protocolo || null };
     } catch (err) {
@@ -2467,11 +2471,11 @@
   const TRANSPORTADORAS = [
     {
       nome: 'Braspress', sigla: 'BP', modais: ['rodoviario', 'aereo'],
-      cotar: (dados, modal) => cotarViaBackend('/api/braspress-cotar', dados, modal),
+      cotar: (dados, modal) => cotarViaBackend('braspress', dados, modal),
     },
     {
       nome: 'Jamef', sigla: 'JM', modais: ['rodoviario'],
-      cotar: (dados, modal) => cotarViaBackend('/api/jamef-cotar', dados, modal),
+      cotar: (dados, modal) => cotarViaBackend('jamef', dados, modal),
     },
     {
       // Adicionada em 08/09/2026 — mesmo desenho de "adaptador por
@@ -2479,7 +2483,7 @@
       // de resultado precisou mudar. Só rodoviário por enquanto (a
       // especificação da Rodonaves não confirma suporte a aéreo).
       nome: 'Rodonaves', sigla: 'RN', modais: ['rodoviario'],
-      cotar: (dados, modal) => cotarViaBackend('/api/rodonaves-cotar', dados, modal),
+      cotar: (dados, modal) => cotarViaBackend('rodonaves', dados, modal),
     },
   ];
 
@@ -3123,10 +3127,10 @@
     status.textContent = 'Cadastrando…';
 
     try {
-      const resp = await fetch('/api/rodonaves-cotar', {
+      const resp = await fetch('/api/cotar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
-        body: JSON.stringify({ ...corpo, acao: 'cadastrar-cliente' }),
+        body: JSON.stringify({ ...corpo, transportadora: 'rodonaves', acao: 'cadastrar-cliente' }),
       });
       const json = await resp.json();
       if (!resp.ok || json.erro) throw new Error(json.mensagem || 'Não foi possível cadastrar.');
