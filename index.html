@@ -664,7 +664,14 @@
   /* Na faixa lateral estreita o botão de cadastrar destinatário empurrava o
      selo "Erro" para fora da linha. Ocupando a largura da célula, ele desce
      em vez de empurrar. */
-  .cotacao-rail .btn-cadastrar-dest { width: 100%; }
+  /* Na régua estreita da direita, um botão de largura natural empurra o selo
+     de status para fora da linha. Vale para os dois botões que nascem dentro
+     de uma linha de transportadora. */
+  .cotacao-rail .btn-cadastrar-dest,
+  .cotacao-rail .btn-cotar-assim { width: 100%; }
+  /* A linha fora de cobertura é apagada de propósito, mas o botão dela
+     precisa ser legível — senão a saída existe e ninguém enxerga. */
+  .carrier-row.fora-cobertura .btn-cotar-assim { opacity: 1; }
   /* A data da última ocorrência fica presa ao texto da mensagem, não numa
      coluna própria: ela é ressalva sobre aquela mensagem, não um dado a
      comparar linha a linha. */
@@ -1699,6 +1706,50 @@
       r.transportadora === nomeTransportadora && r.cidade === destino.cidade && r.uf === destino.uf) || null;
   }
 
+  // Uma regra de cobertura é uma HIPÓTESE COM VALIDADE, não um fato eterno.
+  //
+  // O problema que isto resolve: bloqueada a transportadora, ela nunca mais é
+  // consultada naquela cidade — então nenhum dado novo pode contradizer a
+  // regra. Ela se confirma sozinha para sempre. Se a transportadora abrir uma
+  // unidade lá em março, ninguém fica sabendo e a empresa paga mais caro sem
+  // nenhum sinal na tela. Foi exatamente o que aconteceu com a Rodonaves em
+  // setembro/2026 por outro motivo (cadastro do destinatário): 16 dias fora
+  // das cotações, e a primeira vez que ela voltou ficou R$ 102,11 mais barata
+  // que a segunda colocada, com o mesmo prazo.
+  //
+  // Daí as três peças: a idade aparece, passa a avisar depois de VALIDADE_DIAS,
+  // e a linha bloqueada da cotação ganha um "cotar mesmo assim" — sem o qual
+  // a única forma de testar de novo seria apagar a regra.
+  const VALIDADE_REGRA_DIAS = 90;
+
+  function diasDesde(iso) {
+    if (!iso) return null;
+    const q = new Date(iso);
+    if (isNaN(q)) return null;
+    return Math.floor((Date.now() - q.getTime()) / 86400000);
+  }
+
+  function idadeRegra(r) {
+    const d = diasDesde(r && r.criadoEm);
+    if (d === null) return '';
+    if (d <= 0) return 'de hoje';
+    if (d === 1) return 'de ontem';
+    if (d < 30) return `de ${d} dias atrás`;
+    const meses = Math.round(d / 30);
+    return `de ${meses} ${meses === 1 ? 'mês' : 'meses'} atrás`;
+  }
+
+  function regraVencida(r) {
+    const d = diasDesde(r && r.criadoEm);
+    return d !== null && d >= VALIDADE_REGRA_DIAS;
+  }
+
+  function procedenciaRegra(r) {
+    return (r && r.origem) === 'medida'
+      ? 'medida no histórico'
+      : 'informada à mão';
+  }
+
   // Só estas frases viram sugestão de regra. A lista é curta de propósito:
   // "Cliente destinatário não encontrado" (7 ocorrências, a maior causa viva
   // da Rodonaves) NÃO entra, porque é problema de cadastro do destinatário e
@@ -1794,6 +1845,8 @@
       ? `<div class="historico-table">${REGRAS_COBERTURA.lista.map((r) => `
           <div class="cob-linha">
             <span><strong>${escapeHtml(r.transportadora)}</strong> não cota para <strong>${escapeHtml(r.cidadeExibicao)}/${escapeHtml(r.uf)}</strong>
+              <br><span class="muted">${escapeHtml(procedenciaRegra(r))}${idadeRegra(r) ? `, ${escapeHtml(idadeRegra(r))}` : ''}</span>
+              ${regraVencida(r) ? `<br><span style="color:var(--warn-border,#b7791f);">⏳ Passou de ${VALIDADE_REGRA_DIAS} dias — vale reconferir. Transportadora abre unidade nova e não avisa ninguém.</span>` : ''}
               ${r.motivo ? `<br><span class="muted">${escapeHtml(r.motivo.slice(0, 160))}</span>` : ''}</span>
             <button type="button" class="secondary cob-remover" data-id="${r.id}">Voltar a cotar</button>
           </div>`).join('')}</div>`
@@ -2773,14 +2826,17 @@
       // propósito, e no fim — se a regra estiver errada, o operador precisa
       // conseguir ver que faltou alguém, senão bloquear vira esconder.
       const linhasFora = estados
-        .map((e, i) => ({ e, c: chamadas[i] }))
+        .map((e, i) => ({ e, c: chamadas[i], i }))
         .filter((x) => x.e.status === 'fora')
         .map((x) => `
       <div class="carrier-row fora-cobertura">
         <div class="logo-dot">${x.c.transportadora.sigla}</div>
         <div>
           <div class="carrier-name">${escapeHtml(x.c.transportadora.nome)}</div>
-          <div class="carrier-sub">Não consultada — regra de cobertura para ${escapeHtml(x.c.bloqueio.cidadeExibicao)}/${escapeHtml(x.c.bloqueio.uf)}</div>
+          <div class="carrier-sub">Não consultada — regra de cobertura para ${escapeHtml(x.c.bloqueio.cidadeExibicao)}/${escapeHtml(x.c.bloqueio.uf)}${idadeRegra(x.c.bloqueio) ? ` · regra ${escapeHtml(idadeRegra(x.c.bloqueio))}` : ''}</div>
+          ${finalizado
+            ? `<button type="button" class="secondary btn-cotar-assim" data-indice="${x.i}" style="margin-top:6px;">Cotar mesmo assim</button>`
+            : ''}
         </div>
         <div class="prazo">—</div>
         <div class="price">—</div>
@@ -3159,9 +3215,19 @@
   }
 
   listaResultados.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('.btn-cadastrar-dest');
-    if (!btn) return;
-    abrirCadastroDestinatario(Number(btn.dataset.indice));
+    const cad = ev.target.closest('.btn-cadastrar-dest');
+    if (cad) { abrirCadastroDestinatario(Number(cad.dataset.indice)); return; }
+
+    // "Cotar mesmo assim": consulta uma transportadora bloqueada por regra,
+    // desta vez só. Não apaga a regra nem a desliga — é o teste que permite
+    // descobrir que a regra ficou velha. Sem ele, a regra nunca poderia ser
+    // desmentida, porque a transportadora bloqueada nunca é consultada.
+    const assim = ev.target.closest('.btn-cotar-assim');
+    if (assim) {
+      assim.disabled = true;
+      assim.textContent = 'Consultando…';
+      if (rodadaAtual) rodadaAtual.refazer(Number(assim.dataset.indice));
+    }
   });
 
   areaCadastroDest.addEventListener('click', async (ev) => {
