@@ -1369,6 +1369,26 @@
           <div id="lista-cobertura"></div>
         </div>
 
+        <!-- Sonda da malha da Rodonaves. Não muda nada na cotação: serve para
+             descobrir se dá pra saber, ANTES de cotar, que a transportadora
+             não tem unidade atendendo aquele CEP — o que tornaria a regra
+             manual desnecessária. A doc não mostra o formato da resposta, então
+             o primeiro passo é olhar uma de verdade. -->
+        <div class="panel">
+          <h2>Malha da Rodonaves (sonda)</h2>
+          <p class="arch-note" style="margin-top:0;">A Rodonaves tem um endpoint que diz qual unidade atende um CEP. Se ele disser com clareza "nenhuma", o motor pode saber que ela não atende <strong>antes</strong> de cotar, e aí não precisa de regra guardada. A documentação não mostra o formato da resposta — então aqui a gente só olha a resposta crua. <strong>Isto não bloqueia nem altera cotação nenhuma.</strong> Compare um CEP atendido (ex.: 31030370, Belo Horizonte) com um que já falhou (Mombaça/CE, Iguatu/CE).</p>
+          <div class="grid cols-3">
+            <div class="field">
+              <label>CEP para testar</label>
+              <input type="text" id="malhaCep" placeholder="Ex.: 31030370" maxlength="9">
+            </div>
+            <div class="field" style="align-self:end;">
+              <button type="button" class="secondary" id="btn-malha">Consultar malha</button>
+            </div>
+          </div>
+          <pre id="malha-resultado" class="arch-note" style="white-space:pre-wrap; word-break:break-word; margin:0;"></pre>
+        </div>
+
         <div class="panel">
           <h2>Acrescentar à mão</h2>
           <form id="form-cobertura">
@@ -1819,6 +1839,35 @@
     } catch (err) {
       btn.disabled = false;
       alert(err.message);
+    }
+  });
+
+  // Sonda da malha da Rodonaves — só mostra a resposta crua, não decide nada.
+  // Vai pela mesma porta da cotação (/api/cotar) com acao: 'malha', porque o
+  // plano Hobby da Vercel só aceita 12 funções serverless e endpoint novo
+  // custaria uma vaga por um diagnóstico.
+  document.getElementById('btn-malha').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-malha');
+    const saida = document.getElementById('malha-resultado');
+    const cep = document.getElementById('malhaCep').value.replace(/\D/g, '');
+    if (cep.length !== 8) { saida.textContent = 'Informe um CEP com 8 dígitos.'; return; }
+    btn.disabled = true;
+    saida.textContent = 'Consultando…';
+    try {
+      const resp = await fetch('/api/cotar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+        body: JSON.stringify({ transportadora: 'rodonaves', acao: 'malha', cep }),
+      });
+      const json = await resp.json();
+      if (json.erro) throw new Error(json.mensagem || 'Falhou.');
+      let corpo = json.corpo;
+      try { corpo = JSON.stringify(JSON.parse(corpo), null, 2); } catch { /* não era JSON, mostra cru */ }
+      saida.textContent = `CEP ${json.cep} — HTTP ${json.status}\n\n${corpo || '(corpo vazio)'}`;
+    } catch (err) {
+      saida.textContent = `Erro: ${err.message}`;
+    } finally {
+      btn.disabled = false;
     }
   });
 
