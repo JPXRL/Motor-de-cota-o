@@ -2411,7 +2411,15 @@
       // número e bairro separados — e é aqui, e só aqui, que eles existem
       // separados. Fica amarrado ao CNPJ consultado para não usar o endereço
       // de um cliente no cadastro de outro.
-      ultimaConsultaCnpj = { ...dados, cnpj };
+      // Guardado SÓ COM DÍGITOS. Era guardado como o operador digitou
+      // ("45.171.655/0001-60") e comparado, no painel de cadastro, contra o
+      // mesmo campo já limpo ("45171655000160") — nunca batia. O efeito: o
+      // painel abria sem rua, número, bairro, e-mail e telefone, e o operador
+      // digitava tudo de novo, mesmo tendo clicado em "Buscar dados pelo CNPJ".
+      // Só cidade, UF, CEP e razão social apareciam, porque esses três têm
+      // outra origem além desta consulta. Visto ao vivo em 24/09/2026 no
+      // cadastro da JESSICA MALINGRE (Formosa/GO).
+      ultimaConsultaCnpj = { ...dados, cnpj: cnpj.replace(/\D/g, '') };
       lookupStatusCnpj.textContent = `✓ Dados oficiais encontrados (situação: ${dados.situacao || 'não informada'}) — revise antes de cotar.`;
       lookupStatusCnpj.className = 'lookup-status ok';
     } catch (err) {
