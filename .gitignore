@@ -1,1 +1,12 @@
+# Pasta da CLI da Vercel — configuração local da máquina, não do projeto.
 .vercel
+
+# Scripts avulsos e rascunhos que só fazem sentido nesta máquina
+# (conferências pontuais, o antigo deploy_access.ps1, arquivos de teste).
+# Ficam guardados em local/ para não sumirem, e fora do repositório para não
+# poluírem a raiz de quem clonar.
+local/
+
+node_modules/
+*.log
+.DS_Store

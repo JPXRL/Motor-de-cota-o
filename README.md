@@ -1,35 +1,98 @@
 # Motor de Cotação de Frete — RARE WAY
 
-Ferramenta interina de cotação de frete: consulta Jamef, Braspress e Rodonaves em paralelo, compara preço e prazo, e ajuda a decidir qual transportadora usar em cada envio.
+Consulta **Braspress, Jamef e Rodonaves ao mesmo tempo** para um mesmo envio e
+mostra preço e prazo lado a lado, para que a expedição escolha com comparação
+na mão em vez de cotar portal por portal.
 
-- **Site em produção:** https://motor-cotacao-frete.vercel.app
-- **Deploy:** automático — todo push na branch `main` publica direto em produção (via integração Vercel + GitHub).
+**No ar:** https://motor-cotacao-frete.vercel.app (atrás de senha única da equipe)
 
-## Estrutura
+> Está trabalhando neste projeto com o Claude? Leia **[CLAUDE.md](CLAUDE.md)**
+> primeiro — lá estão as regras que não podem ser quebradas, o que está em
+> aberto e os erros que já custaram tempo.
 
-- `index.html` — frontend (formulário de cotação + cadastro de caixas + histórico + rastreio), sem build step.
-- `login.html` — tela de login customizada com a identidade visual da RARE WAY (fundo com padrão de pontos + logo), usada no lugar do popup nativo de Basic Auth do navegador. Página estática autocontida (CSS e imagens embutidos), sem dependências externas.
-- `middleware.js` — controle de acesso: exige a senha única compartilhada (`MOTOR_SENHA`, ver abaixo) para abrir qualquer página ou chamar qualquer função deste site. Antes usava o popup nativo de Basic Auth do navegador; agora redireciona para `login.html` e verifica um cookie de sessão assinado (HMAC-SHA256), sem exigir novo login a cada visita dentro da validade da sessão (12h). Continua sendo senha única compartilhada — sem conta por pessoa. (A tentativa anterior de login individual por pessoa foi removida em 01/09/2026 por não funcionar de forma confiável.)
-- `api/` — funções serverless (Vercel Functions) que guardam as credenciais das transportadoras e falam com as APIs reais:
-  - `jamef-cotar.js`, `braspress-cotar.js`, `rodonaves-cotar.js` — cotação de frete. A Rodonaves é a mais complexa das três: usa três domínios/APIs diferentes (busca de cidade, cotação e prazo de entrega, cada um com seu próprio login) em vez de um domínio só — ver comentário no topo do arquivo e `especificacao-api-rodonaves.md` no projeto Claude. As três já têm cotação real confirmada (Rodonaves desde 08/09/2026).
-  - `jamef-rastrear.js`, `braspress-rastrear.js` — rastreio de encomendas (consulta ao vivo, sem guardar nada), usadas pela tela "Rastreio" do site.
-  - `consulta-cnpj.js` — busca de dados de empresa pela CNPJá (Receita Federal).
-  - `caixas.js` — CRUD do cadastro de caixas padrão (banco Postgres, quando conectado).
-  - `historico-cotacoes.js` — log de cada cotação feita (banco Postgres, quando conectado).
-  - `login.js` — verifica a senha enviada pelo formulário em `login.html` e, se correta, cria o cookie de sessão assinado que o `middleware.js` passa a aceitar.
-  - `logout.js` — apaga o cookie de sessão (encerra a sessão atual).
-  - `me.js` — código do login individual antigo (baseado em `APP_USERS`/`SESSION_SECRET`), não é chamado por nada hoje; mantido só como referência histórica.
+## O que o sistema faz
 
-## Variáveis de ambiente (Vercel → Project Settings → Environment Variables)
+| Tela | Para quê |
+|---|---|
+| **Cotação** | Consulta as três transportadoras em paralelo. Cada uma aparece assim que responde. Mostra valor, prazo, protocolo e **quanto o frete representa do valor do pedido**. Registra qual foi escolhida, o motivo e a diferença para a mais barata. |
+| **Rastreio** | Consulta pontual de uma encomenda na Braspress ou na Jamef. Não guarda nada. |
+| **Cadastro de caixas** | As caixas padrão da RARE WAY, para o operador escolher em vez de digitar medidas toda vez. |
+| **Cobertura** | Destinos que uma transportadora já recusou. Nesses casos o motor deixa de consultá-la, em vez de gastar 20 segundos para receber a mesma recusa. |
+| **Histórico** | Cotações anteriores, com a taxa de resposta de cada transportadora e as mensagens de erro agrupadas. |
 
-Nunca cadastradas em código nem em chat — só direto no painel do Vercel:
+## Como é feito
 
-- `JAMEF_USERNAME`, `JAMEF_PASSWORD`, `JAMEF_AMBIENTE`, `JAMEF_CNPJ_REMETENTE`, `JAMEF_CEP_ORIGEM` — usadas tanto na cotação (`jamef-cotar.js`) quanto no rastreio (`jamef-rastrear.js`).
-- `BRASPRESS_USERNAME`, `BRASPRESS_PASSWORD`, `BRASPRESS_CNPJ_REMETENTE`, `BRASPRESS_CEP_ORIGEM` — usadas tanto na cotação (`braspress-cotar.js`) quanto no rastreio (`braspress-rastrear.js`).
-- `RODONAVES_USERNAME`, `RODONAVES_PASSWORD`, `RODONAVES_CNPJ_REMETENTE`, `RODONAVES_CEP_ORIGEM`, `RODONAVES_CONTATO_NOME`, `RODONAVES_CONTATO_TELEFONE` — usadas na cotação (`rodonaves-cotar.js`). As duas últimas (`CONTATO_NOME`/`CONTATO_TELEFONE`) existem porque a Rodonaves exige um contato na cotação, diferente da Jamef/Braspress.
-- `POSTGRES_URL` (e variáveis irmãs) — cadastradas automaticamente pelo Vercel ao conectar o banco Postgres (Neon) na aba Storage.
-- `MOTOR_SENHA` — a senha única que a equipe usa para entrar no site, digitada em `login.html`. Também é usada como chave para assinar o cookie de sessão (não existe variável de sessão separada). Enquanto esta variável não existir, o site fica aberto sem pedir senha, igual está hoje.
+Sem framework e sem build: `index.html` é o sistema inteiro — HTML, CSS e um
+único bloco `<script>`. O que precisa de segredo (as credenciais das
+transportadoras) roda no backend, em funções serverless.
 
-## Documentação do projeto
+```
+index.html  ─►  api/ (portas de entrada)  ─►  lib/ (a lógica)  ─►  APIs das transportadoras
+                        │
+                        └─►  Postgres (Neon) — caixas, histórico, cobertura
+```
 
-As decisões de negócio, a especificação de cada API de transportadora e o histórico de mudanças ficam no projeto Claude "Fretes (cotação/validação)" — não neste repositório.
+- **`api/`** — uma função serverless por arquivo. Só faz porta: confere o
+  método, a trava de CSRF, e despacha.
+- **`lib/`** — onde mora a lógica de verdade. Não conta no limite de funções
+  da hospedagem.
+- **`middleware.js`** — exige o cookie de sessão antes de servir qualquer
+  página ou função.
+- **`docs/`** — as decisões do projeto, a especificação de cada API de
+  transportadora e as medições feitas até aqui.
+
+> **Por que `api/`, `lib/`, `index.html` e `middleware.js` ficam na raiz:** é
+> onde a Vercel procura. Mudar isso de lugar derruba o site. Ver CLAUDE.md.
+
+## Rodando e publicando
+
+Não há passo de build. Para publicar:
+
+```bash
+git push        # a Vercel detecta e publica sozinha
+```
+
+O push é barrado automaticamente se o projeto passar de 12 funções serverless
+(limite do plano Hobby) — ver `scripts/checar-funcoes.js`.
+
+**Publicar não é estar no ar.** Confirme na aba *Deployments* da Vercel que o
+commit ficou **Ready**. Já aconteceu de quatro deploys falharem em silêncio
+enquanto o site servia a versão antiga.
+
+## Configuração
+
+As credenciais **nunca** ficam no código nem passam por conversa — são
+digitadas direto em *Vercel → Project Settings → Environment Variables*:
+
+| Grupo | Variáveis |
+|---|---|
+| Acesso ao site | `MOTOR_SENHA` |
+| Banco | `POSTGRES_URL` (criada pela integração Neon, aba Storage) |
+| Jamef | `JAMEF_USERNAME`, `JAMEF_PASSWORD`, `JAMEF_AMBIENTE`, `JAMEF_CNPJ_REMETENTE`, `JAMEF_CEP_ORIGEM` |
+| Braspress | `BRASPRESS_USERNAME`, `BRASPRESS_PASSWORD`, `BRASPRESS_CNPJ_REMETENTE`, `BRASPRESS_CEP_ORIGEM` |
+| Rodonaves | `RODONAVES_USERNAME`, `RODONAVES_PASSWORD`, `RODONAVES_CNPJ_REMETENTE`, `RODONAVES_CEP_ORIGEM`, `RODONAVES_CONTATO_NOME`, `RODONAVES_CONTATO_TELEFONE` |
+
+As tabelas do banco se criam sozinhas na primeira chamada. **Sem banco
+conectado nada quebra:** as caixas caem nas 6 padrão e nenhuma regra de
+cobertura é aplicada.
+
+## Documentação
+
+Tudo em [`docs/`](docs/). Os pontos de partida:
+
+- [`docs/motor-cotacao-frete-arquitetura.md`](docs/motor-cotacao-frete-arquitetura.md) — a história completa das decisões
+- [`docs/especificacao-api-braspress.md`](docs/especificacao-api-braspress.md) · [`jamef`](docs/especificacao-api-jamef.md) · [`rodonaves`](docs/especificacao-api-rodonaves.md) — as três APIs, com o que foi confirmado em chamada real e o que ainda é só documentação
+- [`docs/limite-funcoes-vercel.md`](docs/limite-funcoes-vercel.md) — o incidente dos deploys silenciosos e a regra que ficou
+- [`docs/plano-de-execucao.md`](docs/plano-de-execucao.md) — onde o projeto está e o que vem a seguir
+
+## Situação das transportadoras
+
+| | Cotação | Rastreio |
+|---|---|---|
+| **Braspress** | confirmada em chamada real | implementado, **nunca testado de verdade** |
+| **Jamef** | confirmada em chamada real (produção) | confirmado em chamada real |
+| **Rodonaves** | confirmada em chamada real | **401 no teste**, não diagnosticado |
+
+A Rodonaves exige que o destinatário **já exista na base dela** antes de
+cotar — não está documentado em lugar nenhum, foi descoberto medindo produção.
+Por isso existe o botão "Cadastrar destinatário" na tela de cotação.
