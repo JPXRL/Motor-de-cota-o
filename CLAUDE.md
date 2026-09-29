@@ -207,15 +207,25 @@ verificar de fato, e sempre vale a pena:
 
 ### Depois do deploy
 
-`scripts/conferir-no-ar.ps1` confere o que o site está **realmente servindo**:
+`scripts/conferir-no-ar.ps1` confere qual commit o site está **realmente
+servindo**:
 
 ```powershell
-.\scripts\conferir-no-ar.ps1 -Procurar "btn-cotar-assim"
+.\scripts\conferir-no-ar.ps1
 ```
 
-Passe um trecho que só existe na versão nova. Se ele não aparecer, o deploy
-falhou mesmo com o commit no GitHub. É a outra metade da regra "push não é
-deploy": a trava impede a causa conhecida, este script confere o resultado.
+O `middleware.js` responde em `/versao` (público, sem sessão) o commit que
+está no ar, e o script compara com o último commit local. Diferente ou sem
+resposta = falha, com código de saída 1. É a outra metade da regra "push não
+é deploy": a trava impede a causa conhecida, este script confere o resultado.
+
+Até 29/09/2026 o script procurava um trecho de texto na página (`-Procurar`).
+Isso **nunca funcionou**: a página fica atrás do login, o script recebia o
+redirecionamento, pulava a busca e terminava sem erro. Lição: uma verificação
+que não consegue verificar tem que falhar, não passar calada.
+
+Mesmo com o script dizendo OK, a regra continua: quem confirma "Ready" é o
+Juan, na aba Deployments.
 
 ---
 

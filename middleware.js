@@ -82,6 +82,20 @@ export default async function middleware(request) {
     return;
   }
 
+  // /versao diz qual commit esta no ar, sem exigir sessao. Existe porque
+  // "push nao e deploy": o scripts/conferir-no-ar.ps1 compara esta resposta
+  // com o ultimo commit local. Antes ele procurava um trecho na pagina, mas
+  // a pagina fica atras do login e a busca nunca acontecia. Responder aqui,
+  // no middleware, nao gasta vaga no teto de 12 funcoes. O identificador do
+  // commit nao e segredo (o repositorio e privado e o hash sozinho nao abre
+  // nada). A Vercel preenche VERCEL_GIT_COMMIT_SHA sozinha em cada deploy.
+  if (path === '/versao') {
+    return new Response(
+      JSON.stringify({ commit: process.env.VERCEL_GIT_COMMIT_SHA || null }),
+      { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } }
+    );
+  }
+
   const autenticado = await verificarSessao(request.headers.get('cookie'), senhaConfigurada);
   if (autenticado) {
     return;
