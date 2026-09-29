@@ -1,24 +1,13 @@
 // Verifica a senha de acesso unica e, se correta, gera um cookie de sessao
 // assinado (HMAC-SHA256, derivado da propria MOTOR_SENHA). Substitui o antigo
 // sistema multiusuario (APP_USERS/SESSION_SECRET), que foi removido.
+//
+// Desde 29/09/2026 o login tambem pede o nome de quem esta entrando. A senha
+// continua sendo uma so para a equipe; o nome serve para o historico dizer
+// quem fez cada cotacao. A criacao do cookie mora em lib/sessao.js, junto com
+// a leitura, para os dois lados nunca mais se desencontrarem.
 
-const { createHmac, timingSafeEqual } = require('crypto');
-
-const DURACAO_SESSAO_MS = 12 * 60 * 60 * 1000; // 12 horas
-
-function comparacaoSegura(a, b) {
-  const bufA = Buffer.from(String(a), 'utf-8');
-  const bufB = Buffer.from(String(b), 'utf-8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-function assinar(valor, segredo) {
-  return createHmac('sha256', segredo).update(valor).digest('base64url');
-}
+const { criarCookie, normalizarNome, comparacaoSegura } = require('../lib/sessao');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -37,19 +26,21 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { senha } = req.body || {};
+  const { senha, nome } = req.body || {};
+
+  // O nome e conferido antes da senha para a mensagem de erro ser util: quem
+  // esqueceu o nome nao precisa ouvir "senha incorreta".
+  const usuario = normalizarNome(nome);
+  if (!usuario) {
+    res.status(400).json({ erro: true, mensagem: 'Digite o seu nome.' });
+    return;
+  }
+
   if (!comparacaoSegura(senha || '', senhaConfigurada)) {
     res.status(401).json({ erro: true, mensagem: 'Senha incorreta.' });
     return;
   }
 
-  const exp = Date.now() + DURACAO_SESSAO_MS;
-  const payload = Buffer.from(JSON.stringify({ exp }), 'utf-8').toString('base64url');
-  const token = `${payload}.${assinar(payload, senhaConfigurada)}`;
-
-  res.setHeader(
-    'Set-Cookie',
-    `motor_sessao=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.floor(DURACAO_SESSAO_MS / 1000)}`
-  );
+  res.setHeader('Set-Cookie', criarCookie(usuario, senhaConfigurada));
   res.status(200).json({ ok: true });
 };

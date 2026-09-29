@@ -1477,15 +1477,13 @@
   });
 
   // ================= Quem está usando =================
-  // O /api/me devolve o usuário da sessão (a infraestrutura de login por
-  // usuário já existe: APP_USERS + SESSION_SECRET). Serve para duas coisas:
-  // mostrar quem está logado na barra lateral, e carimbar cada cotação com
-  // quem a fez — sem isso, "quem escolheu esta transportadora" é uma pergunta
-  // sem resposta.
+  // O /api/me devolve o nome que a pessoa digitou no login (vai dentro do
+  // cookie de sessão, ver lib/sessao.js). Aqui ele só aparece na barra
+  // lateral: quem carimba cada cotação com o nome é o servidor, lendo a
+  // própria sessão, para não depender do que o navegador manda.
   //
-  // Se o login ainda não estiver configurado no Vercel, a barra lateral
-  // mostra "Sem login configurado" em vez de um nome inventado.
-  let usuarioLogado = null;
+  // Sessão aberta antes do campo de nome existir (29/09/2026) vem sem nome
+  // até expirar; aí a barra lateral mostra "Sem login individual".
 
   function iniciais(nome) {
     const partes = String(nome).trim().split(/\s+/).filter(Boolean);
@@ -1503,7 +1501,6 @@
       if (!elNome || !elPapel || !elAv) return;
 
       if (j && j.usuario) {
-        usuarioLogado = j.usuario;
         elNome.textContent = j.usuario;
         elAv.textContent = iniciais(j.usuario);
         elPapel.textContent = 'Sessão ativa';
@@ -1984,6 +1981,13 @@
   // que é a resposta das transportadoras — não a decisão da casa. Quem olhava
   // a tela não conseguia ver a única coisa que ela deveria provar: escolhemos
   // com quem devia, e quando não, por quê e por quanto.
+  // Quem fez a cotação. A coluna "usuario" era gravada e devolvida pelo
+  // servidor, mas esta tela nunca a mostrava (e ela vinha sempre vazia, por
+  // causa do me.js quebrado até 29/09/2026). Cotações antigas ficam sem nome.
+  function quemCotou(h) {
+    return h.usuario ? ` · por ${escapeHtml(h.usuario)}` : '';
+  }
+
   function celulaEscolha(h) {
     const maisBarata = h.melhor
       ? escapeHtml(h.melhor.transportadora) + ' · ' + histMoeda(h.melhor.valor)
@@ -1991,7 +1995,7 @@
 
     if (!h.escolha) {
       return '<span class="hist-sem-escolha">não registrada</span>'
-        + `<br><span class="muted">mais barata: ${maisBarata}</span>`;
+        + `<br><span class="muted">mais barata: ${maisBarata}${quemCotou(h)}</span>`;
     }
 
     const e = h.escolha;
@@ -2005,6 +2009,7 @@
       + (pagouMais ? ` <span class="hist-mais">+${histMoeda(e.diferencaParaMenor)}</span>` : '')
       + `<br><span class="muted">${escapeHtml(motivo)}`
       + (pagouMais ? ` · mais barata: ${maisBarata}` : '')
+      + quemCotou(h)
       + '</span>';
   }
 
@@ -2952,7 +2957,6 @@
         // Remetente virar seletor (Fase 5), este valor vem de lá.
         nunota: parseInt(document.getElementById('nunota').value, 10) || null,
         codemp: 1,
-        usuario: usuarioLogado,
         resultados: respostas.map((r) => ({ transportadora: r.transportadora.nome, modal: r.modal, prazoDias: r.prazoDias, valor: r.valor })),
         erros: erros.map((e) => ({ transportadora: e.transportadora.nome, modal: e.modal, mensagem: e.mensagem })),
         melhor: respostas.length ? { transportadora: respostas[0].transportadora.nome, valor: respostas[0].valor, prazoDias: respostas[0].prazoDias } : null,

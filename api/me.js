@@ -1,57 +1,30 @@
-// Serverless function: diz ao front-end se o navegador já tem uma sessão
-// válida (e de quem), ou se o login nem foi configurado ainda no Vercel.
-// O middleware.js já barra esta rota com 401 se não houver sessão válida
-// (quando o login está configurado) — aqui só extraímos o nome do usuário
-// pra devolver pro front-end mostrar na barra lateral.
+// Diz ao front-end quem esta usando o motor: o nome digitado no login, que
+// viaja dentro do cookie de sessao assinado. A barra lateral mostra esse nome
+// e cada cotacao gravada no historico leva ele.
+//
+// Ate 29/09/2026 este arquivo lia o login antigo por conta (APP_USERS,
+// SESSION_SECRET, cookie rw_session), removido em 01/09. Como essas variaveis
+// nao existiam mais, ele nunca achava ninguem, e a coluna "usuario" do
+// historico ficou vazia por quase um mes sem ninguem notar.
+//
+// O middleware.js ja barra esta rota com 401 se nao houver sessao valida.
 
-const { createHmac, timingSafeEqual } = require('crypto');
-
-function comparacaoSegura(a, b) {
-  const bufA = Buffer.from(a, 'utf-8');
-  const bufB = Buffer.from(b, 'utf-8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-function assinar(valor, segredo) {
-  return createHmac('sha256', segredo).update(valor).digest('base64url');
-}
-
-function usuarioDaSessao(cookieHeader, segredo) {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(/(?:^|;\s*)rw_session=([^;]+)/);
-  if (!match) return null;
-  const token = decodeURIComponent(match[1]);
-  const i = token.lastIndexOf('.');
-  if (i < 0) return null;
-  const payload = token.slice(0, i);
-  const assinatura = token.slice(i + 1);
-  if (!comparacaoSegura(assinatura, assinar(payload, segredo))) return null;
-  try {
-    const dados = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
-    if (!dados.usuario || !dados.exp || Date.now() > dados.exp) return null;
-    return dados.usuario;
-  } catch {
-    return null;
-  }
-}
+const { lerSessao } = require('../lib/sessao');
 
 module.exports = async (req, res) => {
-  const segredo = process.env.SESSION_SECRET;
-  const usuariosConfigurados = process.env.APP_USERS;
-
-  if (!segredo || !usuariosConfigurados) {
-    res.status(200).json({ ok: true, loginConfigurado: false });
+  const senhaConfigurada = process.env.MOTOR_SENHA;
+  if (!senhaConfigurada) {
+    res.status(200).json({ ok: true, loginConfigurado: false, usuario: null });
     return;
   }
 
-  const usuario = usuarioDaSessao(req.headers.cookie, segredo);
-  if (!usuario) {
-    res.status(401).json({ erro: true, mensagem: 'Não autenticado.' });
+  const sessao = lerSessao(req.headers.cookie, senhaConfigurada);
+  if (!sessao) {
+    res.status(401).json({ erro: true, mensagem: 'Nao autenticado.' });
     return;
   }
-  res.status(200).json({ ok: true, loginConfigurado: true, usuario });
+
+  // usuario vem null numa sessao aberta antes do campo de nome existir. Ela
+  // continua valendo ate expirar (12 horas); o proximo login ja traz o nome.
+  res.status(200).json({ ok: true, loginConfigurado: true, usuario: sessao.usuario });
 };

@@ -17,6 +17,7 @@
 // Vercel resolve isso pro cadastro de caixas E pro histórico ao mesmo tempo.
 
 const { sql } = require('@vercel/postgres');
+const { lerSessao } = require('../lib/sessao');
 
 function bancoConfigurado() {
   return Boolean(process.env.POSTGRES_URL);
@@ -211,6 +212,12 @@ module.exports = async (req, res) => {
     const melhor = registro.melhor || null;
     const percentual = melhor && registro.valorMerc ? (Number(melhor.valor) / Number(registro.valorMerc)) * 100 : null;
 
+    // Quem cotou vem da sessao, nao do corpo da requisicao: o navegador
+    // poderia mandar qualquer nome, a sessao e assinada no login. Sessao
+    // aberta antes do campo de nome existir grava null, como antes.
+    const sessao = lerSessao(req.headers.cookie, process.env.MOTOR_SENHA);
+    const usuario = (sessao && sessao.usuario) || null;
+
     const nunota = Number(registro.nunota);
     const codemp = Number(registro.codemp);
 
@@ -232,7 +239,7 @@ module.exports = async (req, res) => {
         ${melhor ? melhor.prazoDias : null},
         ${Number.isInteger(nunota) && nunota > 0 ? nunota : null},
         ${Number.isInteger(codemp) && codemp > 0 ? codemp : null},
-        ${registro.usuario || null},
+        ${usuario},
         ${JSON.stringify(registro.resultados || [])},
         ${JSON.stringify(registro.erros || [])}
       )

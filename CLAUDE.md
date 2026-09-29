@@ -153,7 +153,8 @@ Zuma/
 ├── lib/               ← LÓGICA (não conta no teto)
 │   ├── cotacao-braspress.js  cotacao-jamef.js  cotacao-rodonaves.js
 │   ├── rastreio-braspress.js  rastreio-jamef.js
-│   └── rodonaves-cadastrar-cliente.js
+│   ├── rodonaves-cadastrar-cliente.js
+│   └── sessao.js          cria e lê o cookie de sessão (nome de quem entrou)
 ├── scripts/
 │   └── checar-funcoes.js  ← a trava do teto de 12
 ├── docs/              ← 23 documentos: decisões, especificações, medições

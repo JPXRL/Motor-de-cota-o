@@ -68,6 +68,13 @@
     border: 1px solid var(--painel-escuro2); background: var(--painel-escuro2);
     color: var(--tinta-escura); font-size: 15px; font-family: inherit; outline: none;
   }
+  /* Campo de nome: mesmo visual da senha, sem o espaco a direita reservado
+     para o olho de mostrar senha. */
+  input[type="text"].campo-nome {
+    width: 100%; height: 48px; padding: 0 16px; border-radius: 10px;
+    border: 1px solid var(--painel-escuro2); background: var(--painel-escuro2);
+    color: var(--tinta-escura); font-size: 15px; font-family: inherit; outline: none;
+  }
   input:focus { border-color: var(--acento); }
   input::placeholder { color: var(--tinta-fraca); opacity: 1; }
   .alternar-senha { position: absolute; right: 14px; background: none; border: none; padding: 4px; cursor: pointer; line-height: 0; }
@@ -103,12 +110,16 @@
         <div>
           <p class="eyebrow">Acesso restrito</p>
           <h1>Entrar</h1>
-          <p class="subtexto">Use a senha de acesso da equipe de expedicao para abrir o motor de cotacao.</p>
+          <p class="subtexto">Digite seu nome e a senha de acesso da equipe de expedicao. O nome fica registrado em cada cotacao que voce fizer.</p>
+        </div>
+        <div>
+          <label for="campoNome">Seu nome</label>
+          <input type="text" id="campoNome" class="campo-nome" name="nome" placeholder="Como a equipe te chama" maxlength="40" autocomplete="name" required>
         </div>
         <div>
           <label for="campoSenha">Senha de acesso</label>
           <div class="campo-senha">
-            <input type="password" id="campoSenha" name="senha" placeholder="Digite a senha da equipe" required autofocus>
+            <input type="password" id="campoSenha" name="senha" placeholder="Digite a senha da equipe" required>
             <button type="button" class="alternar-senha" id="alternarSenha" aria-label="Mostrar senha">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                 <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke="#8F8996" stroke-width="1.6" stroke-linejoin="round"/>
@@ -181,6 +192,18 @@
   });
 
   var campoSenha = document.getElementById("campoSenha");
+  var campoNome = document.getElementById("campoNome");
+
+  // O navegador lembra o nome para a pessoa digitar so uma vez por
+  // computador. Guardado em localStorage, que pode estar bloqueado (janela
+  // anonima, dados apagados): por isso o try, e sem ele a tela so abre com o
+  // campo vazio. O cursor ja comeca onde falta preencher.
+  var CHAVE_NOME = "motor_nome";
+  try {
+    var nomeSalvo = localStorage.getItem(CHAVE_NOME);
+    if (nomeSalvo) campoNome.value = nomeSalvo;
+  } catch (e) {}
+  (campoNome.value ? campoSenha : campoNome).focus();
   var alternarSenha = document.getElementById("alternarSenha");
   alternarSenha.addEventListener("click", function () {
     var mostrando = campoSenha.type === "text";
@@ -203,6 +226,12 @@
     ev.preventDefault();
     mensagemErro.textContent = "";
     var senha = campoSenha.value;
+    var nome = campoNome.value.replace(/s+/g, " ").trim();
+    if (!nome) {
+      mensagemErro.textContent = "Digite o seu nome.";
+      campoNome.focus();
+      return;
+    }
     if (!senha) return;
     botao.disabled = true;
     botao.textContent = "Entrando...";
@@ -212,13 +241,14 @@
         "Content-Type": "application/json",
         "X-Requested-With": "motor-rareway"
       },
-      body: JSON.stringify({ senha: senha })
+      body: JSON.stringify({ senha: senha, nome: nome })
     }).then(function (resp) {
       return resp.json().then(function (dados) {
         return { ok: resp.ok, dados: dados };
       });
     }).then(function (resultado) {
       if (resultado.ok && resultado.dados && resultado.dados.ok) {
+        try { localStorage.setItem(CHAVE_NOME, nome); } catch (e) {}
         window.location.href = destinoSeguro();
         return;
       }
