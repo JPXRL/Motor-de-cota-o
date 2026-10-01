@@ -142,6 +142,24 @@ Combinar com o Giovanni antes.
 
 ---
 
+## `AD_TRANSPCOT`: qual código de parceiro por empresa (01/10/2026)
+
+Cada transportadora tem um cadastro por filial no `TGFPAR`, e quem coleta é a
+filial mais próxima da empresa remetente. Medido nas vendas de 2026 e decidido
+com o Juan:
+
+| Empresa | Braspress | Jamef | Rodonaves |
+|---|---|---|---|
+| 1 — NP Matriz (BH) | 1286 Contagem | 1263 BH/Contagem | 15124 Contagem |
+| 4 — Anova SP (Campinas) | 1976 Campinas | 182 Campinas | 1289 Ribeirão Preto (já tem histórico de uso; existe filial em Campinas, 44.914.992/0032-34, não cadastrada) |
+| 6 — Anova RJ | 26691 São João de Meriti | 12653 São João de Meriti | 31798 Barra Mansa (cadastrada pelo Juan em 01/10; a de Duque de Caxias está baixada na Receita) |
+
+**Por enquanto só a linha da empresa 1 é usada:** o motor cota como Matriz, e
+a gravação recusa nota de outra empresa até a Anova ter credencial própria nas
+transportadoras.
+
+---
+
 ## Onda 1 — Tabelas
 
 Três tabelas. Volume estimado: cerca de **3 mil linhas/mês somadas** (36 mil/ano), já validado com a TI como pequeno para esta base.
