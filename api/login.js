@@ -11,18 +11,18 @@ const { criarCookie, normalizarNome, comparacaoSegura } = require('../lib/sessao
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
-    res.status(405).json({ erro: true, mensagem: 'Metodo nao permitido.' });
+    res.status(405).json({ erro: true, mensagem: 'Método não permitido.' });
     return;
   }
 
   if (req.headers['x-requested-with'] !== 'motor-rareway') {
-    res.status(403).json({ erro: true, mensagem: 'Requisicao nao autorizada.' });
+    res.status(403).json({ erro: true, mensagem: 'Requisição não autorizada.' });
     return;
   }
 
   const senhaConfigurada = process.env.MOTOR_SENHA;
   if (!senhaConfigurada) {
-    res.status(200).json({ erro: true, mensagem: 'Controle de acesso ainda nao esta ativo neste site.' });
+    res.status(200).json({ erro: true, mensagem: 'Controle de acesso ainda não está ativo neste site.' });
     return;
   }
 

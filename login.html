@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login - Motor de Cotacao de Frete - RARE WAY</title>
+<title>Login - Motor de Cotação de Frete - RARE WAY</title>
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   :root {
@@ -101,7 +101,7 @@
       <svg id="svgPontos" preserveAspectRatio="none"></svg>
       <div class="identidade">
         <p class="titulo">Start<br>Your<br>Power</p>
-        <p class="subtitulo">Motor de cotacao de frete</p>
+        <p class="subtitulo">Motor de cotação de frete</p>
       </div>
     </div>
     <div class="painel-direito">
@@ -110,7 +110,7 @@
         <div>
           <p class="eyebrow">Acesso restrito</p>
           <h1>Entrar</h1>
-          <p class="subtexto">Digite seu nome e a senha de acesso da equipe de expedicao. O nome fica registrado em cada cotacao que voce fizer.</p>
+          <p class="subtexto">Digite seu nome e a senha de acesso da equipe de expedição. O nome fica registrado em cada cotação que você fizer.</p>
         </div>
         <div>
           <label for="campoNome">Seu nome</label>
@@ -131,7 +131,7 @@
         </div>
         <button type="submit" class="entrar" id="botaoEntrar">Entrar</button>
         <div class="divisor"></div>
-        <p class="rodape">Motor de Cotacao de Frete &middot; Expedicao RARE WAY</p>
+        <p class="rodape">Motor de Cotação de Frete &middot; Expedição RARE WAY</p>
       </form>
     </div>
   </div>
@@ -252,13 +252,13 @@
         window.location.href = destinoSeguro();
         return;
       }
-      mensagemErro.textContent = (resultado.dados && resultado.dados.mensagem) || "Nao foi possivel entrar. Tente de novo.";
+      mensagemErro.textContent = (resultado.dados && resultado.dados.mensagem) || "Não foi possível entrar. Tente de novo.";
       botao.disabled = false;
       botao.textContent = "Entrar";
       campoSenha.focus();
       campoSenha.select();
     }).catch(function () {
-      mensagemErro.textContent = "Falha de conexao. Tente de novo.";
+      mensagemErro.textContent = "Falha de conexão. Tente de novo.";
       botao.disabled = false;
       botao.textContent = "Entrar";
     });
