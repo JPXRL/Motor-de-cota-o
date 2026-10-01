@@ -68,6 +68,14 @@ async function garantirTabela() {
   await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS motivo_escolha TEXT`;
   await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS diferenca_para_menor NUMERIC`;
   await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhido_em TIMESTAMPTZ`;
+
+  // ===== Gravação na nota do Sankhya (01/10/2026) =====
+  // O protocolo da escolhida vai para o AD_NUMCOTFRETE da nota; até aqui ele
+  // só aparecia na tela e se perdia. E a gravação fica registrada aqui para o
+  // Histórico mostrar que a cotação está na nota (lib/nota-sankhya.js).
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS escolhida_protocolo TEXT`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS nota_gravada_em TIMESTAMPTZ`;
+  await sql`ALTER TABLE historico_cotacoes ADD COLUMN IF NOT EXISTS nota_gravada_nunota INTEGER`;
 }
 
 // Lista fechada de motivos. Fica no servidor também (não só na tela) pra que
@@ -97,7 +105,8 @@ module.exports = async (req, res) => {
                melhor_prazo_dias, resultados, erros,
                nunota, usuario,
                escolhida_transportadora, escolhida_modal, escolhida_valor,
-               escolhida_prazo_dias, motivo_escolha, diferenca_para_menor, escolhido_em
+               escolhida_prazo_dias, motivo_escolha, diferenca_para_menor, escolhido_em,
+               escolhida_protocolo, nota_gravada_em, nota_gravada_nunota
         FROM historico_cotacoes
         ORDER BY criado_em DESC
         LIMIT 200
@@ -133,7 +142,11 @@ module.exports = async (req, res) => {
               motivo: r.motivo_escolha,
               diferencaParaMenor: r.diferenca_para_menor !== null ? Number(r.diferenca_para_menor) : null,
               em: r.escolhido_em,
+              protocolo: r.escolhida_protocolo,
             }
+          : null,
+        notaGravada: r.nota_gravada_em
+          ? { em: r.nota_gravada_em, nunota: Number(r.nota_gravada_nunota) }
           : null,
         nunota: r.nunota !== null ? Number(r.nunota) : null,
         usuario: r.usuario,
@@ -188,8 +201,9 @@ module.exports = async (req, res) => {
           escolhida_prazo_dias     = ${e.prazoDias != null ? Number(e.prazoDias) : null},
           motivo_escolha           = ${e.motivo},
           diferenca_para_menor     = ${e.diferencaParaMenor != null ? Number(e.diferencaParaMenor) : null},
+          escolhida_protocolo      = ${e.protocolo ? String(e.protocolo).slice(0, 80) : null},
           escolhido_em             = now()
-        WHERE id = ${id}
+        WHERE id = ${id} AND nota_gravada_em IS NULL
       `;
       res.status(200).json({ ok: true, guardado: true });
     } catch (err) {

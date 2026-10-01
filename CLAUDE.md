@@ -58,7 +58,8 @@ Plano Hobby da Vercel: **no máximo 12 funções por deploy, e o `middleware.js`
 conta**. Medido, não suposto: 11 em `api/` + middleware = 12 → Ready;
 12 + middleware = 13 → Error em 5 segundos.
 
-**Hoje: 9 em `api/` + middleware = 10. Duas vagas livres.**
+**Hoje: 10 em `api/` + middleware = 11. Uma vaga livre** (a 10ª é
+`api/nota-sankhya.js`, de 01/10/2026).
 
 `scripts/checar-funcoes.js` conta e barra o push acima de 12, instalado como
 hook `pre-push`. **`.git/hooks/` não é versionado** — em máquina nova,
@@ -75,7 +76,7 @@ porta com um parâmetro**: é o que `api/cotar.js` e `api/rastrear.js` fazem.
 Transportadora nova custa **zero vaga** — um arquivo em `lib/` e uma linha no
 mapa de `api/cotar.js`.
 
-Se um dia as duas vagas acabarem: juntar `login` + `logout` + `me` num
+Quando a última vaga acabar: juntar `login` + `logout` + `me` num
 `auth.js` leva de 9 para 7. Não foi feito de propósito — quebrar a
 autenticação tranca todo mundo para fora, então merece commit separado e
 testado sozinho. O plano Pro (~US$ 20/mês, 100 funções) não se justifica
@@ -97,6 +98,7 @@ Variáveis usadas (nomes apenas):
 | Jamef | `JAMEF_USERNAME`, `JAMEF_PASSWORD`, `JAMEF_AMBIENTE`, `JAMEF_CNPJ_REMETENTE`, `JAMEF_CEP_ORIGEM` |
 | Braspress | `BRASPRESS_USERNAME`, `BRASPRESS_PASSWORD`, `BRASPRESS_CNPJ_REMETENTE`, `BRASPRESS_CEP_ORIGEM` |
 | Rodonaves | `RODONAVES_USERNAME`, `RODONAVES_PASSWORD`, `RODONAVES_CNPJ_REMETENTE`, `RODONAVES_CEP_ORIGEM`, `RODONAVES_CONTATO_NOME`, `RODONAVES_CONTATO_TELEFONE` |
+| Sankhya (gravar na nota) | `SANKHYA_CLIENT_ID`, `SANKHYA_CLIENT_SECRET`, `SANKHYA_XTOKEN` — as mesmas do terminal do Juan |
 
 ### 4. `lib/rodonaves-cadastrar-cliente.js` ESCREVE no sistema da Rodonaves
 
@@ -149,11 +151,14 @@ Zuma/
 │   ├── cobertura.js       regras de cobertura por cidade
 │   ├── consulta-cnpj.js   dados oficiais via CNPJá
 │   ├── historico-cotacoes.js
+│   ├── nota-sankhya.js    grava a cotação escolhida na nota (conferir → gravar)
 │   ├── login.js  logout.js  me.js
 ├── lib/               ← LÓGICA (não conta no teto)
 │   ├── cotacao-braspress.js  cotacao-jamef.js  cotacao-rodonaves.js
 │   ├── rastreio-braspress.js  rastreio-jamef.js
 │   ├── rodonaves-cadastrar-cliente.js
+│   ├── sankhya.js         sessão no Gateway do Sankhya (entra, consulta/grava, sai)
+│   ├── nota-sankhya.js    regras da gravação na nota: travas, campos, leitura de volta
 │   └── sessao.js          cria e lê o cookie de sessão (nome de quem entrou)
 ├── scripts/
 │   └── checar-funcoes.js  ← a trava do teto de 12

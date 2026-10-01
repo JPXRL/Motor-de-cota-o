@@ -973,6 +973,50 @@
     line-height: 1.5;
   }
   .escolha-feita strong { display: block; margin-bottom: var(--s-1); }
+
+  /* ===================================================================
+     Gravação na nota do Sankhya (01/10/2026)
+     Bloco neutro (não lilás, não dourado) de propósito: é um passo opcional
+     depois da escolha, e não pode competir visualmente com ela. Vermelho só
+     para quando o motor se recusa a gravar; laranja para o aviso de CNPJ,
+     que pede atenção mas pode ser a decisão certa.
+     =================================================================== */
+  .nota-box {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg-soft);
+    padding: var(--s-3);
+    margin-top: var(--s-3);
+    font-size: var(--t-sm);
+    line-height: 1.5;
+  }
+  .nota-box h3 { margin: 0 0 var(--s-2); font-size: var(--t-sm); font-weight: 700; }
+  .nota-box .nota-sub { color: var(--muted); font-size: var(--t-mini); margin: 0 0 var(--s-3); }
+  .nota-busca { display: flex; gap: var(--s-2); align-items: flex-end; flex-wrap: wrap; }
+  .nota-busca .field { margin: 0; flex: 0 0 180px; }
+  .nota-dados { display: grid; grid-template-columns: 110px 1fr; gap: 4px var(--s-3); margin: 0 0 var(--s-3); font-size: var(--t-mini); }
+  .nota-dados dt { color: var(--muted); }
+  .nota-dados dd { margin: 0; font-weight: 500; }
+  .nota-ok { color: var(--accent); font-size: var(--t-mini); font-weight: 700; margin: 0 0 var(--s-3); }
+  .nota-aviso {
+    border: 1px solid var(--warn-border);
+    background: var(--warn-bg);
+    border-radius: var(--r-sm);
+    padding: var(--s-2) var(--s-3);
+    font-size: var(--t-mini);
+    margin: 0 0 var(--s-3);
+  }
+  .nota-recusa {
+    border: 1px solid var(--erro);
+    border-radius: var(--r-md);
+    padding: var(--s-3);
+    margin-top: var(--s-3);
+    font-size: var(--t-sm);
+    line-height: 1.5;
+    background: var(--panel);
+  }
+  .nota-recusa strong { color: var(--erro); display: block; margin-bottom: var(--s-1); }
+  .nota-grava { font-size: var(--t-mini); color: var(--muted); margin: 0 0 var(--s-3); padding-left: 18px; }
 </style>
 </head>
 <body>
@@ -2236,7 +2280,7 @@
           </div>
           ${historico.map((h) => `
             <div class="historico-row">
-              <span>${escapeHtml(new Date(h.dataHora).toLocaleString('pt-BR'))}<br><span class="muted">${h.nunota ? 'nota ' + h.nunota : 'sem nota'}</span></span>
+              <span>${escapeHtml(new Date(h.dataHora).toLocaleString('pt-BR'))}<br><span class="muted">${h.notaGravada ? `✓ gravada na nota ${h.notaGravada.nunota}` : (h.nunota ? 'nota ' + h.nunota : 'sem nota')}</span></span>
               <span>${escapeHtml(h.cliente || h.cnpjDest || '—')}<br><span class="muted">${escapeHtml(h.cidadeDest || '')}</span></span>
               <span>${h.pesoTotal ? String(h.pesoTotal).replace('.', ',') + ' kg' : '—'}</span>
               <span>${h.valorMerc ? histMoeda(h.valorMerc) : '—'}</span>
@@ -3080,6 +3124,7 @@
             modal: escolhida.modal,
             valor: escolhida.valor,
             prazoDias: escolhida.prazoDias,
+            protocolo: escolhida.protocolo || null,
             motivo,
             diferencaParaMenor: diferenca,
           }),
@@ -3111,7 +3156,173 @@
           ? 'Escolha gravada no histórico.'
           : '<span style="color:var(--warn-border); font-weight:700;">Não foi possível gravar no histórico</span> — a escolha vale para esta tela, mas não ficou registrada. Confira se o banco está conectado.'}
       </div>
+      <div id="nota-area"></div>
     `;
+
+    // Só oferece gravar na nota se a escolha ficou no histórico: é de lá que
+    // o servidor tira o que grava. Sem histórico, não há o que conferir.
+    if (guardado) montarGravacaoNota();
+  }
+
+  // ================= Gravação na nota do Sankhya =================
+  // Opcional (o operador pode registrar a escolha e não gravar, por exemplo
+  // quando a nota ainda não existe) e sempre em duas etapas: conferir e só
+  // depois gravar. O servidor decide o que gravar a partir do histórico; a
+  // tela só mostra o que ele devolveu — assim o conferido é o gravado.
+  function montarGravacaoNota() {
+    const area = document.getElementById('nota-area');
+    if (!area) return;
+    const nunotaDigitado = document.getElementById('nunota').value || '';
+    area.innerHTML = `
+      <div class="nota-box">
+        <h3>Gravar na nota do Sankhya</h3>
+        <p class="nota-sub">Leva protocolo, valor, prazo, transportadora e motivo para a nota. Antes de gravar, o motor mostra a nota para você conferir. É opcional.</p>
+        <div class="nota-busca">
+          <div class="field">
+            <label for="nota-nunota">Nº da nota (NUNOTA)</label>
+            <input type="number" id="nota-nunota" min="1" step="1" placeholder="Ex.: 407021" value="${escapeHtml(nunotaDigitado)}">
+          </div>
+          <button type="button" class="secondary" id="btn-conferir-nota">Conferir nota</button>
+        </div>
+        <p class="status-line" id="status-nota" style="margin:var(--s-2) 0 0;"></p>
+      </div>
+    `;
+    const conferirAgora = () => conferirNota(document.getElementById('nota-nunota').value);
+    document.getElementById('btn-conferir-nota').addEventListener('click', conferirAgora);
+    document.getElementById('nota-nunota').addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); conferirAgora(); }
+    });
+  }
+
+  async function chamarNotaSankhya(corpo) {
+    const resp = await fetch('/api/nota-sankhya', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
+      body: JSON.stringify({ id: estadoCotacao.id, ...corpo }),
+    });
+    return resp.json();
+  }
+
+  function htmlRecusa(b) {
+    return `<div class="nota-recusa"><strong>${escapeHtml(b.titulo)}</strong>${escapeHtml(b.texto)}</div>`;
+  }
+
+  function textoPrazo(dias) {
+    return `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
+  }
+
+  function linhasVaiGravar(g) {
+    const linha1 = [
+      g.protocolo ? `Protocolo ${escapeHtml(g.protocolo)}` : 'Sem protocolo da transportadora',
+      g.valor !== null ? brl(g.valor) : null,
+      g.prazoDias !== null ? textoPrazo(g.prazoDias) : null,
+      g.percentual !== null ? `${g.percentual.toFixed(1).replace('.', ',')}% da mercadoria` : null,
+    ].filter(Boolean).join(' · ');
+    const transp = `${escapeHtml(g.transportadora)}${g.modal === 'aereo' ? ' aéreo' : ''}`
+      + (g.codparcTransportadora ? ` (parceiro ${g.codparcTransportadora})` : ' · <strong>sem código de parceiro</strong>');
+    const motivo = `Motivo: ${escapeHtml(g.motivo)}${g.motivoCodigo ? ` (${escapeHtml(g.motivoCodigo)})` : ''}`;
+    const quem = `Cotado por ${escapeHtml(g.cotadoPor || 'não informado')}${g.cotadoEm ? ` em ${escapeHtml(g.cotadoEm.slice(0, 16))}` : ''}`;
+    return `<ul class="nota-grava"><li>${linha1}</li><li>Transportadora ${transp} · ${motivo}</li><li>${quem}</li></ul>`;
+  }
+
+  async function conferirNota(valor) {
+    const status = document.getElementById('status-nota');
+    const btn = document.getElementById('btn-conferir-nota');
+    const nunota = parseInt(valor, 10);
+    if (!nunota || nunota <= 0) { status.textContent = 'Digite o número da nota.'; return; }
+    btn.disabled = true;
+    status.textContent = 'Consultando o Sankhya…';
+
+    let r;
+    try { r = await chamarNotaSankhya({ acao: 'conferir', nunota }); }
+    catch { r = { erro: true, mensagem: 'Sem conexão com o servidor.' }; }
+    btn.disabled = false;
+
+    if (r.erro) { status.textContent = r.mensagem || 'Não foi possível consultar a nota.'; return; }
+
+    const n = r.nota;
+    const area = document.getElementById('nota-area');
+    const dados = `
+      <dl class="nota-dados">
+        <dt>Nota</dt><dd>${n.nunota} · ${escapeHtml(n.tipo)}${n.data ? ` · ${escapeHtml(n.data)}` : ''}</dd>
+        <dt>Empresa</dt><dd>${n.codemp} · ${escapeHtml(n.empresa || '')}</dd>
+        <dt>Cliente</dt><dd>${escapeHtml(n.cliente || '—')}</dd>
+        <dt>CNPJ</dt><dd>${escapeHtml(n.cnpj || '—')}</dd>
+        ${n.valor !== null ? `<dt>Valor da nota</dt><dd>${n.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</dd>` : ''}
+      </dl>`;
+
+    // Recusa: mostra a nota (para o operador ver qual é) e o motivo, sem
+    // botão de gravar.
+    if (r.bloqueios && r.bloqueios.length) {
+      area.innerHTML = `
+        <div class="nota-box"><h3>Nota ${n.nunota}</h3>${dados}</div>
+        ${r.bloqueios.map(htmlRecusa).join('')}
+        <div class="escolha-acoes" style="margin-top:var(--s-3);">
+          <button type="button" class="secondary" id="btn-outra-nota">Conferir outra nota</button>
+        </div>`;
+      document.getElementById('btn-outra-nota').addEventListener('click', montarGravacaoNota);
+      return;
+    }
+
+    const confere = r.cnpjConfere;
+    area.innerHTML = `
+      <div class="nota-box">
+        <h3>É esta nota?</h3>
+        ${dados}
+        ${confere
+          ? '<p class="nota-ok">✓ O CNPJ da nota é o mesmo do destinatário cotado.</p>'
+          : `<div class="nota-aviso"><strong>O cliente desta nota não é o destinatário que você cotou</strong> (${escapeHtml(r.cnpjCotado || 'sem CNPJ')}). Confira o número: um dígito trocado grava a cotação na nota de outro cliente.</div>`}
+        <p class="nota-sub" style="margin-bottom:4px;">Vai gravar na nota:</p>
+        ${linhasVaiGravar(r.vaiGravar)}
+        <div class="escolha-acoes">
+          ${confere
+            ? `<button type="button" class="primary" id="btn-gravar-nota">Gravar na nota ${n.nunota}</button>
+               <button type="button" class="secondary" id="btn-outra-nota">Não é esta nota</button>`
+            : `<button type="button" class="secondary" id="btn-outra-nota">Corrigir o número</button>
+               <button type="button" class="secondary" id="btn-gravar-nota">Gravar mesmo assim</button>`}
+          <span class="status-line" id="status-gravar"></span>
+        </div>
+      </div>`;
+    document.getElementById('btn-outra-nota').addEventListener('click', montarGravacaoNota);
+    document.getElementById('btn-gravar-nota').addEventListener('click', () => gravarNota(n.nunota, !confere));
+  }
+
+  async function gravarNota(nunota, confirmarCnpjDiferente) {
+    const btn = document.getElementById('btn-gravar-nota');
+    const status = document.getElementById('status-gravar');
+    btn.disabled = true;
+    status.textContent = 'Gravando no Sankhya…';
+
+    let r;
+    try { r = await chamarNotaSankhya({ acao: 'gravar', nunota, confirmarCnpjDiferente }); }
+    catch { r = { erro: true, mensagem: 'Sem conexão com o servidor. Confira no Sankhya se a nota foi gravada antes de tentar de novo.' }; }
+
+    const area = document.getElementById('nota-area');
+    if (r.bloqueado) {
+      area.innerHTML = r.bloqueios.map(htmlRecusa).join('');
+      return;
+    }
+    if (r.erro) {
+      btn.disabled = false;
+      status.textContent = r.mensagem || 'Não foi possível gravar.';
+      return;
+    }
+
+    const g = r.vaiGravar;
+    const resumo = [
+      g.protocolo ? escapeHtml(g.protocolo) : null,
+      g.valor !== null ? brl(g.valor) : null,
+      g.prazoDias !== null ? textoPrazo(g.prazoDias) : null,
+      escapeHtml(g.transportadora),
+    ].filter(Boolean).join(' · ');
+    const divergiu = r.divergencias && r.divergencias.length;
+    area.innerHTML = `
+      <div class="escolha-feita">
+        <strong>✓ Gravado na nota ${r.nunota}</strong>
+        ${resumo}. Abra a nota no Sankhya para ver os campos.
+        ${divergiu ? `<br><span style="color:var(--erro); font-weight:700;">Atenção: ao ler a nota de volta, ${escapeHtml(r.divergencias.join(', '))} não bateu com o que foi enviado. Confira na nota.</span>` : ''}
+        ${r.avisoHistorico ? `<br><span class="muted">${escapeHtml(r.avisoHistorico)}</span>` : ''}
+      </div>`;
   }
 
   // ================= Faixa de resultados (v2) =================
