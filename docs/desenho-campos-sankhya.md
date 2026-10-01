@@ -77,6 +77,57 @@ Os dois campos abaixo têm lista fechada. Como a TI apontou que domínio em `TDD
 
 ---
 
+## Como os campos foram criados de fato (01/10/2026)
+
+O Giovanni liberou o Juan para criar os campos ele mesmo, pelo Dicionário de
+Dados. Cada campo foi conferido no banco por consulta (`INFORMATION_SCHEMA` +
+`TDDCAM`/`TDDOPC`). O que saiu diferente do desenho acima, e por quê:
+
+**Bloco A — criado e conferido.** Todos os 8 campos aceitam nulo.
+
+| Campo | Desenho | Como ficou no banco |
+|---|---|---|
+| `AD_NUMCOTFRETE` | Texto (30) | `varchar(100)` — o Dicionário não pede tamanho; 100 é o padrão para texto |
+| `AD_VLRCOTFRETE` | Decimal (15,2) | `float` — mesmo tipo do `VLRFRETE` e do `VLRNOTA` nativos; não há casas fixas |
+| `AD_PRZCOTFRETE` | Inteiro | `int` |
+| `AD_PERCFRETE` | Decimal (9,4) | `float` |
+| `AD_TRANSPCOT` | Inteiro | `int`, apresentação Padrão (sem ligação ao Parceiro, ver abaixo) |
+| `AD_MOTIVOCOT` | Texto (30), lista | `varchar(10)`, lista — **códigos encurtados**, ver abaixo |
+| `AD_DTCOTFRETE` | Data/Hora | `datetime` |
+| `AD_USUCOTFRETE` | Texto (30) | `varchar(100)` |
+
+**Lista de Opções nasce com 10 caracteres, e o tamanho não se muda pela tela.**
+A janela "Atributos" não tem tamanho, e o valor de uma opção não pode ser
+editado (é chave do registro — tem que apagar e recriar). Por isso os códigos do
+`AD_MOTIVOCOT` foram encurtados. **O motor continua usando os códigos longos
+internamente (desde 18/09) e traduz na hora de gravar no Sankhya:**
+
+| Código no motor | Código no Sankhya | Descrição |
+|---|---|---|
+| `MENOR_PRECO` | `PRECO` | Menor preço |
+| `MENOR_PRAZO` | `PRAZO` | Menor prazo |
+| `EXIG_CLIENTE` | `CLIENTE` | Exigência do cliente |
+| `RESTR_REGIAO` | `REGIAO` | Restrição de região |
+| `TRANSP_BLOQ` | `BLOQUEIO` | Transportadora bloqueada |
+| `OUTRO` | `OUTRO` | Outro |
+
+O mesmo limite vale para o `AD_SITFRETE` do Bloco B: os códigos dele também
+precisam caber em 10 caracteres.
+
+**Campo adicional não aceita "Permite pesquisa"** (erro CORE_E01915). E
+"Visível no grid de pesquisa" liga sozinho; foi deixado assim.
+
+**Ligação do `AD_TRANSPCOT` ao Parceiro — pendente, e com uma armadilha.** O
+Sankhya guarda uma ligação por par de instâncias (a chave de `TDDLIG` é
+`NUINSTORIG + NUINSTDEST`). A nota já liga à instância `Transportadora` pelo
+`CODPARCTRANSP`. Ligar o `AD_TRANSPCOT` a essa mesma instância **somaria o campo
+à ligação existente** e quebraria o campo Transportadora de toda nota. O jeito
+certo, igual ao que o próprio Sankhya faz para cada campo de parceiro, é criar
+uma instância nova do `TGFPAR` (ex.: `TransportadoraCotacao`) e ligar só a ela.
+Combinar com o Giovanni antes.
+
+---
+
 ## Onda 1 — Tabelas
 
 Três tabelas. Volume estimado: cerca de **3 mil linhas/mês somadas** (36 mil/ano), já validado com a TI como pequeno para esta base.
