@@ -291,6 +291,23 @@ cadastro de destinatário). **Meça primeiro. Traga o número.**
 
 - Lista de cidades/estados atendidos. Sem API de malha, é o único caminho.
 
+**Esperando as três transportadoras (Juan perguntando, 01/10/2026)**
+
+- **A Anova tem acesso próprio à API?** O motor cota só como empresa 1
+  (NP Matriz). A Anova SP (4) e a Anova RJ (6) são outra pessoa jurídica
+  (raiz 27.621.268), e transportadora libera API por CNPJ. **Até isso se
+  resolver, a gravação na nota aceita só notas da empresa 1** — gravar numa
+  nota da Anova uma cotação feita a partir de BH registraria outra rota.
+
+**Novo**
+
+- **Integrar a Pajuçara.** A Anova RJ envia só por ela (142 notas em 2026,
+  parceiro 13632). Sem ela o motor não serve à empresa 6.
+- **Campos da cotação no Sankhya:** os 12 campos `AD_` do `TGFCAB` estão
+  criados (01/10/2026). Como ficaram e por quê: `docs/desenho-campos-sankhya.md`.
+  Listas de opções do Sankhya cabem só 10 caracteres — o motor traduz os
+  códigos de motivo na hora de gravar.
+
 **Técnico**
 
 - Rastreio da Rodonaves devolveu **401** no teste — token velho ou combinação
