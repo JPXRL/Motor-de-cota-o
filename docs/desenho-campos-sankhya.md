@@ -111,8 +111,22 @@ internamente (desde 18/09) e traduz na hora de gravar no Sankhya:**
 | `TRANSP_BLOQ` | `BLOQUEIO` | Transportadora bloqueada |
 | `OUTRO` | `OUTRO` | Outro |
 
-O mesmo limite vale para o `AD_SITFRETE` do Bloco B: os códigos dele também
-precisam caber em 10 caracteres.
+**Bloco B — criado e conferido (01/10/2026).** `AD_DTCOLETAFR`,
+`AD_DTPREVFRETE` e `AD_DTENTREGAFR` são Data (`datetime` no banco, como o
+`DTNEG` nativo); `AD_SITFRETE` é lista `varchar(10)`. O `AD_RASTREIO`, que já
+existia, é `varchar(100)`. Pelo mesmo limite de 10 caracteres, os códigos do
+`AD_SITFRETE` também foram encurtados:
+
+| Código do desenho | Código no Sankhya | Descrição |
+|---|---|---|
+| `AGUARD_COLETA` | `AG_COLETA` | Aguardando coleta |
+| `COLETADO` | `COLETADO` | Coletado |
+| `EM_TRANSITO` | `TRANSITO` | Em trânsito |
+| `SAIU_ENTREGA` | `SAIU_ENTR` | Saiu para entrega |
+| `ENTREGUE` | `ENTREGUE` | Entregue |
+| `OCORRENCIA` | `OCORRENCIA` | Com ocorrência |
+| `DEVOLVIDO` | `DEVOLVIDO` | Devolvido |
+| `EXTRAVIADO` | `EXTRAVIADO` | Extraviado |
 
 **Campo adicional não aceita "Permite pesquisa"** (erro CORE_E01915). E
 "Visível no grid de pesquisa" liga sozinho; foi deixado assim.
