@@ -2986,7 +2986,10 @@
     estadoCotacao = estaCotacao;
     montarEscolha();
 
-    fetch('/api/historico-cotacoes', {
+    // A promessa fica guardada para a confirmação da escolha poder esperar por
+    // ela: escolher antes de o banco responder deixava a cotação sem id, e a
+    // escolha "não ficava registrada" sem motivo nenhum (visto em 02/10/2026).
+    estaCotacao.guardando = fetch('/api/historico-cotacoes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'motor-rareway' },
       body: JSON.stringify({
@@ -3007,8 +3010,13 @@
       }),
     })
       .then((r) => r.json())
-      .then((j) => { estaCotacao.id = j && j.id ? j.id : null; })
-      .catch(() => { /* log de apoio — falha aqui não deve incomodar o operador */ });
+      .then((j) => {
+        estaCotacao.id = j && j.id ? j.id : null;
+        if (!estaCotacao.id) estaCotacao.erroHistorico = (j && j.mensagem) || 'o banco do histórico não está conectado';
+      })
+      .catch(() => { estaCotacao.erroHistorico = 'sem conexão com o servidor ao guardar a cotação'; });
+    // Falha aqui não incomoda o operador agora; só aparece se ele registrar
+    // a escolha, que depende deste id.
 
     btnCotar.textContent = textoOriginalBotao;
     btnCotar.disabled = false;
@@ -3113,6 +3121,9 @@
     // não voltou (ou o banco não está conectado), não dá pra amarrar as duas
     // pontas — e é melhor dizer isso do que fingir que registrou.
     let guardado = false;
+    let motivoFalha = null;
+    if (!estadoCotacao.id && estadoCotacao.guardando) await estadoCotacao.guardando;
+    if (!estadoCotacao.id) motivoFalha = estadoCotacao.erroHistorico || 'a cotação não foi guardada no histórico';
     if (estadoCotacao.id) {
       try {
         const resp = await fetch('/api/historico-cotacoes', {
@@ -3131,7 +3142,8 @@
         });
         const json = await resp.json();
         guardado = Boolean(json && json.guardado);
-      } catch { guardado = false; }
+        if (!guardado) motivoFalha = (json && json.mensagem) || 'o banco do histórico não está conectado';
+      } catch { guardado = false; motivoFalha = 'sem conexão com o servidor'; }
     }
 
     estadoCotacao.registrada = true;
@@ -3154,7 +3166,7 @@
         Motivo: ${rotuloMotivo}${diferenca > 0 ? ` · ${brl(diferenca)} a mais que a mais barata` : ''}.
         ${guardado
           ? 'Escolha gravada no histórico.'
-          : '<span style="color:var(--warn-border); font-weight:700;">Não foi possível gravar no histórico</span> — a escolha vale para esta tela, mas não ficou registrada. Confira se o banco está conectado.'}
+          : `<span style="color:var(--warn-border); font-weight:700;">Não foi possível gravar no histórico</span> — a escolha vale para esta tela, mas não ficou registrada. Motivo: ${escapeHtml(motivoFalha || 'desconhecido')}.`}
       </div>
       <div id="nota-area"></div>
     `;
