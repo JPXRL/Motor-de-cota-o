@@ -3237,6 +3237,19 @@
     return `<ul class="nota-grava"><li>${linha1}</li><li>Transportadora ${transp} · ${motivo}</li><li>${quem}</li></ul>`;
   }
 
+  // O que acontece com o campo nativo "Transp." da nota. Trocar uma
+  // transportadora que alguém já pôs fica fora do motor de propósito: só avisa.
+  function linhaTransp(t, nomeCotada) {
+    if (!t) return '';
+    const cotada = `${escapeHtml(nomeCotada)}${t.cotada ? ` (${t.cotada})` : ''}`;
+    if (t.situacao === 'vazio') return `<p class="nota-ok">✓ O campo Transp. está vazio e vai ficar com ${cotada}.</p>`;
+    if (t.situacao === 'igual') return `<p class="nota-ok">✓ O campo Transp. já está com ${cotada}.</p>`;
+    if (t.situacao === 'outra') {
+      return `<div class="nota-aviso"><strong>O campo Transp. já está com ${escapeHtml(t.nomeAtual || 'outra transportadora')} (${t.atual}).</strong> O motor não troca: grava a cotação da ${cotada} nos campos de cotação e deixa o Transp. como está. Se a transportadora mudou, troque no Sankhya.</div>`;
+    }
+    return `<div class="nota-aviso">Sem código de parceiro da ${escapeHtml(nomeCotada)} para esta empresa: o campo Transp. fica como está.</div>`;
+  }
+
   async function conferirNota(valor) {
     const status = document.getElementById('status-nota');
     const btn = document.getElementById('btn-conferir-nota');
@@ -3284,6 +3297,7 @@
         ${confere
           ? '<p class="nota-ok">✓ O CNPJ da nota é o mesmo do destinatário cotado.</p>'
           : `<div class="nota-aviso"><strong>O cliente desta nota não é o destinatário que você cotou</strong> (${escapeHtml(r.cnpjCotado || 'sem CNPJ')}). Confira o número: um dígito trocado grava a cotação na nota de outro cliente.</div>`}
+        ${linhaTransp(r.transp, r.vaiGravar.transportadora)}
         <p class="nota-sub" style="margin-bottom:4px;">Vai gravar na nota:</p>
         ${linhasVaiGravar(r.vaiGravar)}
         <div class="escolha-acoes">
@@ -3331,7 +3345,7 @@
     area.innerHTML = `
       <div class="escolha-feita">
         <strong>✓ Gravado na nota ${r.nunota}</strong>
-        ${resumo}. Abra a nota no Sankhya para ver os campos.
+        ${resumo}.${r.transp && r.transp.situacao === 'vazio' ? ' Campo Transp. preenchido.' : ''} Abra a nota no Sankhya para ver os campos.
         ${divergiu ? `<br><span style="color:var(--erro); font-weight:700;">Atenção: ao ler a nota de volta, ${escapeHtml(r.divergencias.join(', '))} não bateu com o que foi enviado. Confira na nota.</span>` : ''}
         ${r.avisoHistorico ? `<br><span class="muted">${escapeHtml(r.avisoHistorico)}</span>` : ''}
       </div>`;
